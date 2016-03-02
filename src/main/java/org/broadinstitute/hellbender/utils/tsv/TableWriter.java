@@ -184,9 +184,26 @@ public abstract class TableWriter<R> implements Closeable {
         Utils.nonNull(record, "the record cannot be null");
         writeHeaderIfApplies();
         final DataLine dataLine = new DataLine(lineNumber + 1, columns,IllegalArgumentException::new);
-        composeLine(record,dataLine);
+        composeLine(beforeWriteRecord(record), dataLine);
         writer.writeNext(dataLine.unpack(), false);
         lineNumber++;
+    }
+
+    /**
+     * Hook called right before writing the record.
+     *
+     * <p>
+     *     Allows to log the writing action or provide an alternative record to
+     *     be written instead.
+     * </p>
+     * <p>
+     *     The default behaviour is just to return the input record unchanged.
+     * </p>
+     * @param record never {@code null}.
+     * @return never {@code null}.
+     */
+    protected R beforeWriteRecord(final R record) {
+        return record;
     }
 
     /**
