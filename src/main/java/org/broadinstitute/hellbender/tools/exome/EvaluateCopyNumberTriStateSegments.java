@@ -6,6 +6,7 @@ import org.broadinstitute.hellbender.cmdline.CommandLineProgram;
 import org.broadinstitute.hellbender.cmdline.CommandLineProgramProperties;
 import org.broadinstitute.hellbender.cmdline.programgroups.CopyNumberProgramGroup;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.utils.IntervalUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.collections.IntervalsSkipList;
@@ -20,6 +21,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Tool to evaluate the output of {@link DiscoverCopyNumberTriStateSegments}.
@@ -126,14 +128,12 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
         SummaryOutputWriter sampleSummaryOutputWriter = null;
         SegmentDetailOutputWriter segmentDetailOutputWriter = null;
         try {
-            final SampleSummaryOutputRecord overallSampleSummaryRecord =
-                    new SampleSummaryOutputRecord(overallSampleSummaryRecordSampleName);
             sampleSummaryOutputWriter = createSampleSummaryOutputWriter();
             segmentDetailOutputWriter = createSegmentDetailOutputWriter();
             for (final String sample : samples) {
-                doWorkPerSample(sample, targets, sampleSummaryOutputWriter, overallSampleSummaryRecord, segmentDetailOutputWriter);
+                doWorkPerSample(sample, targets, sampleSummaryOutputWriter, segmentDetailOutputWriter);
             }
-            writeOverallSummaryRecordIfApplies(sampleSummaryOutputWriter, overallSampleSummaryRecord);
+            writeOverallSummaryRecordIfApplies(sampleSummaryOutputWriter);
             closeOutputWriters(sampleSummaryOutputWriter, segmentDetailOutputWriter, true);
         } catch (final RuntimeException ex) {
             closeOutputWriters(sampleSummaryOutputWriter, segmentDetailOutputWriter, false);
@@ -142,7 +142,7 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
         return "SUCCESS";
     }
 
-    private void writeOverallSummaryRecordIfApplies(final SummaryOutputWriter sampleSummaryOutputWriter, final SampleSummaryOutputRecord overallSampleSummaryRecord) {
+    private void writeOverallSummaryRecordIfApplies(final SummaryOutputWriter sampleSummaryOutputWriter) {
         if (includeOverallSummaryRecord) {
             if (sampleSummaryOutputWriter == null) {
                 logger.warn("The overall sample summary record has been requested but the sample summary output file was not provided");
@@ -154,7 +154,6 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
                 }
             }
         }
-        logger.info(overallSampleSummaryRecord.toString());
     }
 
     private SegmentDetailOutputWriter createSegmentDetailOutputWriter() {
@@ -208,7 +207,6 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
     private void doWorkPerSample(final String sample,
                                  final TargetCollection<Target> targets,
                                  final SummaryOutputWriter summaryOutputWriter,
-                                 final SampleSummaryOutputRecord overallSampleSummaryRecord,
                                  final SegmentDetailOutputWriter segmentDetailOutputWriter) {
         final List<CopyNumberTriStateSegment> truthSegments =
                 readRelevantSegments(sample, truthFile, targets);
@@ -218,26 +216,25 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
         final IntervalsSkipList<CopyNumberTriStateSegment> indexedCalledSegments =
                 new IntervalsSkipList<>(calledSegments);
 
+        final List<SegmentDetailOutputRecord> records = new ArrayList<>(truthSegments.size());
+
+        final SampleSummaryOutputRecord sampleSummaryOutputRecord = new SampleSummaryOutputRecord(sample);
         // Iterate over truth calls and do most of the counting.
         for (final CopyNumberTriStateSegment truthSegment : truthSegments) {
             final List<CopyNumberTriStateSegment> overlappingCalls =
                     indexedCalledSegments.getOverlapping(truthSegment.getInterval());
             if (overlappingCalls.isEmpty()) {
-                overallSampleSummaryRecord.falseNegative++;
-                writeSegmentDetailOutput(segmentDetailOutputWriter,
-                        SegmentDetailOutputRecord.falseNegative(sample, truthSegment));
+                sampleSummaryOutputRecord.falseNegative++;
+                records.add(SegmentDetailOutputRecord.falseNegative(sample, truthSegment));
             } else if (isMixedCall(overlappingCalls)) {
-                overallSampleSummaryRecord.mixedPositive++;
-                writeSegmentDetailOutput(segmentDetailOutputWriter,
-                        SegmentDetailOutputRecord.otherPositive(sample, EvaluationClass.MIXED_POSITIVE, truthSegment, overlappingCalls));
+                sampleSummaryOutputRecord.mixedPositive++;
+                records.add(SegmentDetailOutputRecord.otherPositive(sample, EvaluationClass.MIXED_POSITIVE, truthSegment, overlappingCalls));
             } else if (overlappingCalls.get(0).getCall() == truthSegment.getCall()) {
-                overallSampleSummaryRecord.truePositive++;
-                writeSegmentDetailOutput(segmentDetailOutputWriter,
-                        SegmentDetailOutputRecord.otherPositive(sample, EvaluationClass.TRUE_POSITIVE, truthSegment, overlappingCalls));
+                sampleSummaryOutputRecord.truePositive++;
+                records.add(SegmentDetailOutputRecord.otherPositive(sample, EvaluationClass.TRUE_POSITIVE, truthSegment, overlappingCalls));
             } else {
-                writeSegmentDetailOutput(segmentDetailOutputWriter,
-                        SegmentDetailOutputRecord.otherPositive(sample, EvaluationClass.DISCORDANT_POSITIVE, truthSegment, overlappingCalls));
-                overallSampleSummaryRecord.discordantPositive++;
+                records.add(SegmentDetailOutputRecord.otherPositive(sample, EvaluationClass.DISCORDANT_POSITIVE, truthSegment, overlappingCalls));
+                sampleSummaryOutputRecord.discordantPositive++;
             }
         }
 
@@ -249,12 +246,15 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
             final List<CopyNumberTriStateSegment> overlappingTruth =
                     indexedTruthSegments.getOverlapping(callSegment.getInterval());
             if (overlappingTruth.isEmpty()) {
-                writeSegmentDetailOutput(segmentDetailOutputWriter,
-                        SegmentDetailOutputRecord.unknownPositive(sample, callSegment));
-                overallSampleSummaryRecord.unknownPositive++;
+                records.add(SegmentDetailOutputRecord.unknownPositive(sample, callSegment));
+                sampleSummaryOutputRecord.unknownPositive++;
             }
         }
-        writeSampleSummaryRecord(summaryOutputWriter, overallSampleSummaryRecord);
+
+        records.stream()
+                .sorted(Comparator.comparing(SegmentDetailOutputRecord::getInterval,
+                        IntervalUtils.LEXICOGRAPHICAL_ORDER_COMPARATOR))
+                .forEach(r -> writeSegmentDetailOutput(segmentDetailOutputWriter, r));
     }
 
     private void writeSegmentDetailOutput(final SegmentDetailOutputWriter segmentDetailOutputWriter, final SegmentDetailOutputRecord segmentDetailOutputRecord) {
@@ -408,7 +408,7 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
             overallRecord.unknownPositive += record.unknownPositive;
             overallRecord.falseNegative += record.falseNegative;
             overallRecord.mixedPositive += record.mixedPositive;
-            return super.beforeWriteRecord(record);
+            return record;
         }
 
         @Override
@@ -547,6 +547,15 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
 
         public SegmentDetailOutputWriter(final File file) throws IOException {
             super(file, COLUMNS);
+            writeComment("Possible classes in the CLASS column: ");
+            for (final EvaluationClass clazz : EvaluationClass.values()) {
+                writeComment(String.format("    %s : %s", clazz.acronym, clazz.name().replace("_", " ")));
+            }
+            writeComment(String.format("Content of %s and %s columns:", TRUTH_COLUMN, CALL_COLUMN));
+            writeComment("   They may contain multiple segment information or none (represented with '.')");
+            writeComment(String.format("   Each segment record is separated with a '%s' and each field in each segment is separated by '%s'", SEGMENT_SEPARATOR, ATTRIBUTE_SEPARATOR));
+            writeComment("   The segments attributes are in this order:");
+            writeComment("       " + String.join(ATTRIBUTE_SEPARATOR, "Start", "End", "Call", "TargetCount", "Mean Cov.", "Std Cov.", "Some Quality", "Start Quality", "End Quality"));
         }
 
         @Override
@@ -554,19 +563,23 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
                                    final DataLine dataLine) {
             dataLine.append(record.sample)
                     .append(record.evaluationClass.toString())
+                    .append(record.interval.getContig())
+                    .append(record.interval.getStart())
+                    .append(record.interval.getEnd())
                     .append(composeSegmentsString(record.truths))
                     .append(composeSegmentsString(record.calls));
 
         }
 
-        private String composeSegmentsString(final List<CopyNumberTriStateSegment> truths) {
-            if (truths.isEmpty()) {
+        private String composeSegmentsString(final List<CopyNumberTriStateSegment> segments) {
+            if (segments.isEmpty()) {
                 return NO_SEGMENT_STRING;
             } else {
-                return truths.stream()
-                        .map(s ->  String.join(ATTRIBUTE_SEPARATOR, Arrays.asList("" + s.getStart(), "" + s.getEnd(),
-                                "" + s.getCall(), "" + s.getSomeQuality(),
-                                "" + s.getStartQuality(), "" + s.getEndQuality())))
+                return segments.stream()
+                        .map(s ->  Stream.of(s.getStart(), s.getEnd(),
+                                s.getCall().toCallString(), s.getTargetCount(), s.getMean(), s.getStdev(), s.getSomeQuality(),
+                                s.getStartQuality(), s.getEndQuality()).map(Object::toString)
+                                .collect(Collectors.joining(ATTRIBUTE_SEPARATOR)))
                         .collect(Collectors.joining(SEGMENT_SEPARATOR));
             }
         }
