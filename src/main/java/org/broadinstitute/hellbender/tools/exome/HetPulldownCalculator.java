@@ -39,7 +39,7 @@ public final class HetPulldownCalculator {
     private static final double HET_ALLELE_FRACTION = 0.5;
 
     //set read-depth thresholds for pulldown, interval threshold for indexing for SamLocusIterator
-    private static final int READ_DEPTH_THRESHOLD = 10;
+    private static final int READ_DEPTH_THRESHOLD = 15;
     private static final int MAX_INTERVALS_FOR_INDEX = 25000;
 
     /**

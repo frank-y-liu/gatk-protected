@@ -8,17 +8,21 @@ import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Reference and alternate allele counts at a SNP site specified by an interval.
+ * Reference and alternate allele statistics at a SNP site specified by an interval.
  *
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
 public final class AllelicCount implements Locatable {
+
     private final SimpleInterval interval;
     private final int refReadCount, altReadCount;
     private Map<Character, Integer> baseCounts = null;
+    private double hetLogLikelihood, homLogLikelihood;
 
     public AllelicCount(final SimpleInterval interval, final int refReadCount, final int altReadCount) {
         ParamUtils.isPositiveOrZero(refReadCount, "Can't construct AllelicCount with negative read counts.");
@@ -36,6 +40,21 @@ public final class AllelicCount implements Locatable {
         this.baseCounts = Utils.nonNull(baseCounts);
     }
 
+    public AllelicCount(final SimpleInterval interval, final int refReadCount, final int altReadCount,
+                        final double hetLogLikelihood, final double homLogLikelihood) {
+        this(interval, refReadCount, altReadCount);
+        this.hetLogLikelihood = hetLogLikelihood;
+        this.homLogLikelihood = homLogLikelihood;
+    }
+
+    public AllelicCount(final SimpleInterval interval, final int refReadCount, final int altReadCount,
+                        final Map<Character, Integer> baseCounts, final double hetLogLikelihood,
+                        final double homLogLikelihood) {
+        this(interval, refReadCount, altReadCount, baseCounts);
+        this.hetLogLikelihood = hetLogLikelihood;
+        this.homLogLikelihood = homLogLikelihood;
+    }
+
     @Override
     public String getContig() {return interval.getContig(); }
 
@@ -49,9 +68,13 @@ public final class AllelicCount implements Locatable {
         return new Interval(interval.getContig(), interval.getStart(), interval.getEnd());
     }
 
-    public int getRefReadCount() {  return refReadCount;        }
+    public int getRefReadCount() { return refReadCount; }
 
-    public int getAltReadCount() {  return altReadCount;        }
+    public int getAltReadCount() { return altReadCount; }
+
+    public double getHetLoglikelihood() { return hetLogLikelihood; }
+
+    public double getHomLoglikelihood() { return homLogLikelihood; }
 
     public int getBaseCount(final char base) {
         try {
@@ -117,6 +140,13 @@ public final class AllelicCount implements Locatable {
         return toMinorAlleleFractionTargetCoverage(name, 1.);
     }
 
+    /**
+     * checks whether two pulldowns are equal
+     * Note: equality of base-counts and base-error maps are NOT checked
+     *
+     * @param o an arbitrary object
+     * @return true if the pulldowns are equal, false otherwise
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) {
@@ -128,7 +158,7 @@ public final class AllelicCount implements Locatable {
 
         final AllelicCount count = (AllelicCount) o;
         return interval.equals(count.interval) && refReadCount == count.refReadCount
-                && altReadCount == count.altReadCount && baseCounts == count.baseCounts;
+                && altReadCount == count.altReadCount;
     }
 
     @Override

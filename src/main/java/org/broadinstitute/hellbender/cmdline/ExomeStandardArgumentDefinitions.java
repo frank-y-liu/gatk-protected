@@ -14,6 +14,9 @@ public final class ExomeStandardArgumentDefinitions {
     public static final String LEGACY_SEG_FILE_SHORT_NAME = "LEG";
     public static final String LEGACY_SEG_FILE_LONG_NAME = "legacy";
 
+    public static final String GENERIC_BAM_FILE_SHORT_NAME = "B";
+    public static final String GENERIC_BAM_FILE_LONG_NAME = "bam";
+
     public static final String NORMAL_BAM_FILE_SHORT_NAME = "N";
     public static final String NORMAL_BAM_FILE_LONG_NAME = "normal";
 
@@ -22,6 +25,12 @@ public final class ExomeStandardArgumentDefinitions {
 
     public static final String SNP_FILE_SHORT_NAME = "SNP";
     public static final String SNP_FILE_LONG_NAME = "snpIntervals";
+
+    public static final String GENERIC_ALLELIC_COUNTS_FILE_LONG_NAME = "hetOutput";
+    public static final String GENERIC_ALLELIC_COUNTS_FILE_SHORT_NAME = "hetO";
+
+    public static final String GENERIC_DETAILED_ALLELIC_COUNTS_FILE_LONG_NAME = "hetDetailedOutput";
+    public static final String GENERIC_DETAILED_ALLELIC_COUNTS_FILE_SHORT_NAME = "hetDetO";
 
     public static final String NORMAL_ALLELIC_COUNTS_FILE_LONG_NAME = "normalHets";
     public static final String NORMAL_ALLELIC_COUNTS_FILE_SHORT_NAME = "NHET";
