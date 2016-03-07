@@ -103,27 +103,29 @@ public final class HetPulldownCalculatorUnitTest extends BaseTest {
 
     @DataProvider(name = "inputIsPileupHetCompatible")
     public Object[][] inputIsPileupHetCompatible() {
-        final Map<Character, Integer> baseCountsUsualHet = makeBaseCounts(50, 50, 0, 0);
-        final Map<Character, Integer> baseCountsUsualHom = makeBaseCounts(50, 1, 0, 0);
-        final Map<Character, Integer> baseCountsEdgeHom = makeBaseCounts(21, 1, 0, 8);
-        final Map<Character, Integer> baseCountsEmpty = makeBaseCounts(0, 0, 0, 0);
+        final double normalErrorRate = 0.01;
+        final double equalOddsThreshold = 1.0;
 
-        //if pval < pvalThreshold, expected = false
+        //if likelihood ratio < likelihoodRatioThreshold, expected = false
         return new Object[][]{
-                {baseCountsUsualHet, 100, 0.05, true}, //pval = 1.0
-                {baseCountsUsualHom, 51, 0.05, false}, //pval = 4.6185277824406525e-14
-                {baseCountsEdgeHom, 30, 0.05, false},  //pval = 0.04277394525706768
-                {baseCountsEdgeHom, 30, 0.04, true},   //pval = 0.04277394525706768
-                {baseCountsEmpty, 0, 0.05, false},     //pval = 1.0
+                {50, 50, normalErrorRate, 1e50, true}, //likelihood ratio = 1.3 x 10^70
+                {10, 10, normalErrorRate, 1e10, true}, //likelihood ratio = 1.0 x 10^14
+                {99, 1, normalErrorRate, 1e-20, false},  // likelihood ratio = 2.1 x 10^-28
+                {90, 10, normalErrorRate, equalOddsThreshold, false},  // likelihood ratio = 1.9 x 10^-10
+                {86, 14, normalErrorRate, equalOddsThreshold, false},  // likelihood ratio = 0.019
+                {85, 15, normalErrorRate, equalOddsThreshold, true},  // likelihood ratio = 1.85
+                {10, 1, normalErrorRate, equalOddsThreshold, false},   // likelihood ratio = 0.054
+                {10, 2, normalErrorRate, equalOddsThreshold, true},   // likelihood ratio = 5.40
+                {10, 2, 0.1, equalOddsThreshold, false}   // likelihood ratio = 0.14
         };
     }
 
     @Test(dataProvider = "inputIsPileupHetCompatible")
-    public void testIsPileupHetCompatible(final Map<Character, Integer> baseCounts, final int totalBaseCounts,
-                                          final double pvalThreshold,
-                                          final boolean expected) {
-        final boolean result = HetPulldownCalculator.isPileupHetCompatible(baseCounts, totalBaseCounts,
-                pvalThreshold);
+    public void testIsHet(final int refBaseCount, final int altBaseCount,
+                          final double errorRate, final double likelihoodRatioThreshold,
+                          final boolean expected) {
+        final boolean result = HetPulldownCalculator.isHet(refBaseCount, altBaseCount,
+                errorRate, likelihoodRatioThreshold);
         Assert.assertEquals(result, expected);
     }
 
@@ -136,35 +138,45 @@ public final class HetPulldownCalculatorUnitTest extends BaseTest {
         normalHetPulldown1.add(new SimpleInterval("2", 14689, 14689), 6, 9);
         normalHetPulldown1.add(new SimpleInterval("2", 14982, 14982), 6, 5);
 
-        //changing pValThreshold from 0.05 -> 0.95 only keeps hets close to balanced
+        //changing error rate from 0.01 to 0.1 removes first het SNP
         final Pulldown normalHetPulldown2 = new Pulldown(normalHeader);
+        normalHetPulldown2.add(new SimpleInterval("1", 11522, 11522), 7, 4);
+        normalHetPulldown2.add(new SimpleInterval("1", 12098, 12098), 8, 6);
         normalHetPulldown2.add(new SimpleInterval("1", 14630, 14630), 9, 8);
+        normalHetPulldown2.add(new SimpleInterval("2", 14689, 14689), 6, 9);
         normalHetPulldown2.add(new SimpleInterval("2", 14982, 14982), 6, 5);
 
         return new Object[][]{
-                {0.05, normalHetPulldown1},
-                {0.95, normalHetPulldown2}
+                {0.01, 1.0, normalHetPulldown1},
+                {0.1, 1.0, normalHetPulldown2}
         };
     }
 
     @Test(dataProvider = "inputGetNormalHetPulldown")
-    public void testGetNormalHetPulldown(final double pvalThreshold, final Pulldown expected) {
-        final Pulldown result = calculator.getNormal(NORMAL_BAM_FILE, pvalThreshold);
+    public void testGetNormalHetPulldown(final double errorRate, final double likelihoodRatioThreshold,
+                                         final Pulldown expected) {
+        final Pulldown result = calculator.getNormal(NORMAL_BAM_FILE, errorRate, likelihoodRatioThreshold);
         Assert.assertEquals(result, expected);
     }
 
     @Test(expectedExceptions = UserException.class)
     public void testGetHetPulldownWithUnsortedBAMFile() {
-        final Pulldown result = calculator.getNormal(NORMAL_UNSORTED_BAM_FILE, 0.05);
+        final Pulldown result = calculator.getNormal(NORMAL_UNSORTED_BAM_FILE, 0.01, 1.);
     }
 
     @Test(expectedExceptions = IllegalArgumentException.class)
-    public void testBadpValue() {
-        final Pulldown result = calculator.getNormal(NORMAL_BAM_FILE, -1);
+    public void testBadErrorRate() {
+        final Pulldown result = calculator.getNormal(NORMAL_BAM_FILE, -1, 1.);
+    }
+
+    @Test(expectedExceptions = IllegalArgumentException.class)
+    public void testBadLikelihoodRatioThreshold() {
+        final Pulldown result = calculator.getNormal(NORMAL_BAM_FILE, 0.01, -1.);
     }
 
     @DataProvider(name = "inputGetTumorHetPulldown")
     public Object[][] inputGetTumorHetPulldown() {
+        //first het SNP in normalHetPulldown1 has <= 10 reads in tumor BAM and hence does not pass read depth filter
         final Pulldown tumorHetPulldown = new Pulldown(normalHeader);
         tumorHetPulldown.add(new SimpleInterval("1", 11522, 11522), 7, 4);
         tumorHetPulldown.add(new SimpleInterval("1", 12098, 12098), 8, 6);

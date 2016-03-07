@@ -24,8 +24,14 @@ import java.io.File;
 )
 public final class GetHetCoverage extends CommandLineProgram {
 
-    protected static final String PVALUE_THRESHOLD_FULL_NAME = "pvalueThreshold";
-    protected static final String PVALUE_THRESHOLD_SHORT_NAME = "p";
+    protected static final String ERROR_RATE_FULL_NAME = "errorRate";
+    protected static final String ERROR_RATE_SHORT_NAME = "ER";
+
+    protected static final String LIKELIHOOD_RATIO_THRESHOLD_FULL_NAME = "likelihoodRatioThreshold";
+    protected static final String LIKELIHOOD_RATIO_THRESHOLD_SHORT_NAME = "LR";
+
+    private static final double DEFAULT_LIKELIHOOD_RATIO_THRESHOLD = 1000;
+    private static final double DEFAULT_ERROR_RATE = 0.01;
 
     protected static final String MINIMUM_MAPPING_QUALITY_SHORT_NAME = "minMQ";
     protected static final String MINIMUM_MAPPING_QUALITY_FULL_NAME = "minimumMappingQuality";
@@ -78,12 +84,20 @@ public final class GetHetCoverage extends CommandLineProgram {
     protected File tumorHetOutputFile;
 
     @Argument(
-            doc = "p-value threshold for binomial test for heterozygous SNPs in normal sample (must be in [0, 1]).",
-            fullName = PVALUE_THRESHOLD_FULL_NAME,
-            shortName = PVALUE_THRESHOLD_SHORT_NAME,
-            optional = false
+            doc = "Estimated sequencing error rate.",
+            fullName = ERROR_RATE_FULL_NAME,
+            shortName = ERROR_RATE_SHORT_NAME,
+            optional = true
     )
-    protected double pvalThreshold = 0.05;
+    protected double errorRate = DEFAULT_ERROR_RATE;
+
+    @Argument(
+            doc = "het:hom likelihood ratio threshold for calling heterozygous SNPs in normal sample.",
+            fullName = LIKELIHOOD_RATIO_THRESHOLD_FULL_NAME,
+            shortName = LIKELIHOOD_RATIO_THRESHOLD_SHORT_NAME,
+            optional = true
+    )
+    protected double likelihoodRatioThreshold = DEFAULT_LIKELIHOOD_RATIO_THRESHOLD;
 
     @Argument(
             doc = "Minimum mapping quality; reads with lower quality will be filtered out of pileup.",
@@ -124,7 +138,7 @@ public final class GetHetCoverage extends CommandLineProgram {
                 snpFile, minimumMappingQuality, minimumBaseQuality, VALIDATION_STRINGENCY);
 
         logger.info("Getting normal het pulldown...");
-        final Pulldown normalHetPulldown = hetPulldown.getNormal(normalBAMFile, pvalThreshold);
+        final Pulldown normalHetPulldown = hetPulldown.getNormal(normalBAMFile, errorRate, likelihoodRatioThreshold);
         normalHetPulldown.writeWithBaseCounts(normalHetOutputFile);
         logger.info("Normal het pulldown written to " + normalHetOutputFile.toString());
 

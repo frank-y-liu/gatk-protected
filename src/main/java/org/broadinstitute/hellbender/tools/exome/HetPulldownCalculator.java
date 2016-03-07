@@ -8,8 +8,6 @@ import htsjdk.samtools.filter.SamRecordFilter;
 import htsjdk.samtools.reference.ReferenceSequenceFileWalker;
 import htsjdk.samtools.util.IntervalList;
 import htsjdk.samtools.util.SamLocusIterator;
-import org.apache.commons.math3.stat.inference.AlternativeHypothesis;
-import org.apache.commons.math3.stat.inference.BinomialTest;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.broadinstitute.hellbender.exceptions.UserException;
@@ -18,7 +16,10 @@ import org.broadinstitute.hellbender.utils.param.ParamUtils;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Gets heterozygous SNP pulldown for normal and tumor samples.
@@ -108,48 +109,48 @@ public final class HetPulldownCalculator {
 
     /**
      * Returns true if the distribution of major and other base-pair counts from a pileup at a locus is compatible with
-     * allele fraction of 0.5.
+     * a given heterozygous allele fraction.
      *
      * <p>
-     *     Compatibility is defined by a p-value threshold.  That is, compute the two-sided p-value of observing
-     *     a number of major read counts out of a total number of reads, assuming the given heterozygous
-     *     allele fraction.  If the p-value is less than the given threshold, then reject the null hypothesis
-     *     that the heterozygous allele fraction is 0.5 (i.e., SNP is likely to be homozygous) and return false,
-     *     otherwise return true.
+     *     Compatibility is defined by a likelihood ratio threshold between two hypotheses.  First, that the site is
+     *     heterozygous in which case the likelihood is nCa * (1/2)^n.  Second, that the site is homozygous and minor
+     *     allele reads are sequencing errors, with likelihood nCa * errorRate^a * (1 - errorRate)^(n-a).
+     *     Here n and a are total and alt read counts.
      * </p>
-     * @param baseCounts        map of base-pair counts
-     * @param totalBaseCount    total base-pair counts (excluding N, etc.)
-     * @param pvalThreshold     p-value threshold for two-sided binomial test (should be in [0, 1], but no check is performed)
+     * @param refReadCount      number of ref reads at this site
+     * @param altReadCount      number of reads of most common alt at this site
+     * @param errorRate         estimated substitution error rate -- result is not very sensitive to this
+     * @param likelihoodRatioThreshold    ratio of het to hom likelihood required to call a het
      * @return                  boolean compatibility with heterozygous allele fraction
      */
     @VisibleForTesting
-    protected static boolean isPileupHetCompatible(final Map<Character, Integer> baseCounts, final int totalBaseCount,
-                                                   final double pvalThreshold) {
-        final int majorReadCount = Collections.max(baseCounts.values());
+    static boolean isHet(final int refReadCount, final int altReadCount,
+                         final double errorRate, final double likelihoodRatioThreshold) {
+        final int minorReadCount = Math.min(refReadCount, altReadCount);
+        final int majorReadCount = Math.max(refReadCount, altReadCount);
 
-        if (majorReadCount == 0 || totalBaseCount - majorReadCount == 0) {
-            return false;
-        }
-
-        final double pval = new BinomialTest().binomialTest(totalBaseCount, majorReadCount, HET_ALLELE_FRACTION,
-                AlternativeHypothesis.TWO_SIDED);
-
-        return pval >= pvalThreshold;
+        //work in log space to avoid underflow
+        // ignore nCa combinatorial factors common to het and hom because this cancels in the ratio
+        final double hetLogLikelihood = (minorReadCount + majorReadCount) * Math.log(0.5);
+        final double homLogLikelihood = minorReadCount * Math.log(errorRate) + majorReadCount * Math.log(1 - errorRate);
+        final double logLikelihoodRatio = hetLogLikelihood - homLogLikelihood;
+        return logLikelihoodRatio > Math.log(likelihoodRatioThreshold);
     }
 
     /**
      * Calls {@link HetPulldownCalculator#getHetPulldown} with flags set for a normal sample.
      */
-    public Pulldown getNormal(final File normalBAMFile, final double pvalThreshold) {
-        ParamUtils.inRange(pvalThreshold, 0., 1., "p-value threshold must be in [0, 1].");
-        return getHetPulldown(normalBAMFile, this.snpIntervals, SampleType.NORMAL, pvalThreshold);
+    public Pulldown getNormal(final File normalBAMFile, final double errorRate, final double likelihoodRatioThreshold) {
+        ParamUtils.inRange(errorRate, 0., 1., "Error rate must be in [0, 1].");
+        ParamUtils.isPositiveOrZero(likelihoodRatioThreshold, "Likelihood-ratio threshold cannot be negative.");
+        return getHetPulldown(normalBAMFile, this.snpIntervals, SampleType.NORMAL, errorRate, likelihoodRatioThreshold);
     }
 
     /**
      * Calls {@link HetPulldownCalculator#getHetPulldown} with flags set for a tumor sample.
      */
     public Pulldown getTumor(final File tumorBAMFile, final IntervalList normalHetIntervals) {
-        return getHetPulldown(tumorBAMFile, normalHetIntervals, SampleType.TUMOR, -1);
+        return getHetPulldown(tumorBAMFile, normalHetIntervals, SampleType.TUMOR, -1., -1.);
     }
 
     /**
@@ -162,9 +163,8 @@ public final class HetPulldownCalculator {
      *         The IntervalList snpIntervals gives common SNP sites in 1-based format.
      *     </ul>
      *     <ul>
-     *         The p-value threshold must be specified for a two-sided binomial test,
-     *         which is used to determine SNP sites from snpIntervals that are
-     *         compatible with a heterozygous SNP, given the sample.  Only these sites are output.
+     *         The estimated sequencing error rate and likelihood ratio threshold define a likelihood
+     *         test for heterozygous SNP sites, given the sample.  Only these sites are output.
      *     </ul>
      * </p>
      * <p>
@@ -179,11 +179,12 @@ public final class HetPulldownCalculator {
      * @param snpIntervals      IntervalList of SNP sites
      * @param sampleType        flag indicating type of sample (SampleType.NORMAL or SampleType.TUMOR)
      *                          (determines whether to perform binomial test)
-     * @param pvalThreshold     p-value threshold for two-sided binomial test, used for normal sample
+     * @param errorRate         estimated substitution error rate of sequencing
+     * @param likelihoodRatioThreshold     het:hom likelihood ratio threshold for calling a het
      * @return                  Pulldown of heterozygous SNP sites in 1-based format
      */
     private Pulldown getHetPulldown(final File bamFile, final IntervalList snpIntervals, final SampleType sampleType,
-                                    final double pvalThreshold) {
+                                    final double errorRate, final double likelihoodRatioThreshold) {
         try (final SamReader bamReader = SamReaderFactory.makeDefault().validationStringency(validationStringency)
                 .referenceSequence(refFile).open(bamFile);
              final ReferenceSequenceFileWalker refWalker = new ReferenceSequenceFileWalker(this.refFile)) {
@@ -225,18 +226,14 @@ public final class HetPulldownCalculator {
                 final Map<Character, Integer> baseCounts = getPileupBaseCounts(locus);
                 //only include total ACGT counts in binomial test (exclude N, etc.)
                 final int totalBaseCount = baseCounts.values().stream().mapToInt(Number::intValue).sum();
-
-                if (sampleType == SampleType.NORMAL &&
-                        !isPileupHetCompatible(baseCounts, totalBaseCount, pvalThreshold)) {
-                    continue;
-                }
-
                 final char refBase = (char) refWalker.get(locus.getSequenceIndex()).getBases()[locus.getPosition() - 1];
                 final int refReadCount = baseCounts.get(refBase);
                 final int altReadCount = totalBaseCount - refReadCount;
 
-                hetPulldown.add(new SimpleInterval(locus.getSequenceName(), locus.getPosition(), locus.getPosition()),
-                        refReadCount, altReadCount, baseCounts);
+                if (sampleType == SampleType.TUMOR || isHet(refReadCount, altReadCount, errorRate, likelihoodRatioThreshold)) {
+                    final SimpleInterval interval = new SimpleInterval(locus.getSequenceName(), locus.getPosition(), locus.getPosition());
+                    hetPulldown.add(interval, refReadCount, altReadCount, baseCounts);
+                }
             }
             logger.info("Examined " + totalNumberOfSNPs + " sites.");
             return hetPulldown;
