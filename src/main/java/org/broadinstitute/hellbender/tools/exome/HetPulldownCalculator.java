@@ -124,7 +124,7 @@ public final class HetPulldownCalculator {
      * @return                  boolean compatibility with heterozygous allele fraction
      */
     @VisibleForTesting
-    static boolean isHet(final int refReadCount, final int altReadCount,
+    protected static boolean isHet(final int refReadCount, final int altReadCount,
                          final double errorRate, final double likelihoodRatioThreshold) {
         final int minorReadCount = Math.min(refReadCount, altReadCount);
         final int majorReadCount = Math.max(refReadCount, altReadCount);

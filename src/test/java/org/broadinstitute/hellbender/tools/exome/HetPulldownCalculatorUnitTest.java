@@ -138,9 +138,8 @@ public final class HetPulldownCalculatorUnitTest extends BaseTest {
         normalHetPulldown1.add(new SimpleInterval("2", 14689, 14689), 6, 9);
         normalHetPulldown1.add(new SimpleInterval("2", 14982, 14982), 6, 5);
 
-        //changing error rate from 0.01 to 0.1 removes first het SNP
+        //changing error rate from 0.01 to 0.25 removes first het SNP
         final Pulldown normalHetPulldown2 = new Pulldown(normalHeader);
-        normalHetPulldown2.add(new SimpleInterval("1", 11522, 11522), 7, 4);
         normalHetPulldown2.add(new SimpleInterval("1", 12098, 12098), 8, 6);
         normalHetPulldown2.add(new SimpleInterval("1", 14630, 14630), 9, 8);
         normalHetPulldown2.add(new SimpleInterval("2", 14689, 14689), 6, 9);
@@ -148,7 +147,7 @@ public final class HetPulldownCalculatorUnitTest extends BaseTest {
 
         return new Object[][]{
                 {0.01, 1.0, normalHetPulldown1},
-                {0.1, 1.0, normalHetPulldown2}
+                {0.25, 1.0, normalHetPulldown2}
         };
     }
 
