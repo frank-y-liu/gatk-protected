@@ -36,8 +36,8 @@ public class AllelicCountCollection {
     public AllelicCountCollection(final File inputFile) {
         try (final TableReader<AllelicCount> reader = TableUtils.reader(inputFile,
                 (columns, formatExceptionFactory) -> {
-                    if (!columns.matchesExactly(AllelicCountTableColumns.COLUMN_NAME_ARRAY))
-                        throw formatExceptionFactory.apply("Bad header");
+                    if (!columns.containsAll(AllelicCountTableColumns.COLUMN_NAME_ARRAY))
+                        throw formatExceptionFactory.apply("Missing required columns in AllelicCountCollection input file.");
 
                     // return the lambda to translate dataLines into AllelicCounts.
                     return (dataLine) -> {
