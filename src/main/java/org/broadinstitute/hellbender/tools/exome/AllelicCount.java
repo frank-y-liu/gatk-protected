@@ -128,7 +128,7 @@ public final class AllelicCount implements Locatable {
 
         final AllelicCount count = (AllelicCount) o;
         return interval.equals(count.interval) && refReadCount == count.refReadCount
-                && altReadCount == count.altReadCount && baseCounts == count.baseCounts;
+                && altReadCount == count.altReadCount;  //equality of base-counts maps is not checked
     }
 
     @Override
