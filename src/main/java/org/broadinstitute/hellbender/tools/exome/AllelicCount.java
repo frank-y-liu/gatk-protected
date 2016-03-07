@@ -2,10 +2,13 @@ package org.broadinstitute.hellbender.tools.exome;
 
 import htsjdk.samtools.util.Interval;
 import htsjdk.samtools.util.Locatable;
+import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.exome.allelefraction.MinorAlleleFractionCache;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
+
+import java.util.Map;
 
 /**
  * Reference and alternate allele counts at a SNP site specified by an interval.
@@ -15,6 +18,7 @@ import org.broadinstitute.hellbender.utils.param.ParamUtils;
 public final class AllelicCount implements Locatable {
     private final SimpleInterval interval;
     private final int refReadCount, altReadCount;
+    private Map<Character, Integer> baseCounts = null;
 
     public AllelicCount(final SimpleInterval interval, final int refReadCount, final int altReadCount) {
         ParamUtils.isPositiveOrZero(refReadCount, "Can't construct AllelicCount with negative read counts.");
@@ -24,6 +28,12 @@ public final class AllelicCount implements Locatable {
         this.interval = Utils.nonNull(interval, "Can't construct AllelicCount with null interval.");
         this.refReadCount = refReadCount;
         this.altReadCount = altReadCount;
+    }
+
+    public AllelicCount(final SimpleInterval interval, final int refReadCount, final int altReadCount,
+                        final Map<Character, Integer> baseCounts) {
+        this(interval, refReadCount, altReadCount);
+        this.baseCounts = Utils.nonNull(baseCounts);
     }
 
     @Override
@@ -42,6 +52,14 @@ public final class AllelicCount implements Locatable {
     public int getRefReadCount() {  return refReadCount;        }
 
     public int getAltReadCount() {  return altReadCount;        }
+
+    public int getBaseCount(final char base) {
+        try {
+            return baseCounts.get(base);
+        } catch (final NullPointerException e) {
+            throw new UserException("Cannot retrieve base count without base-count map.");
+        }
+    }
 
     /**
      * Returns the maximum likelihood estimate of the alternate-allele fraction.
@@ -110,7 +128,7 @@ public final class AllelicCount implements Locatable {
 
         final AllelicCount count = (AllelicCount) o;
         return interval.equals(count.interval) && refReadCount == count.refReadCount
-                && altReadCount == count.altReadCount;
+                && altReadCount == count.altReadCount && baseCounts == count.baseCounts;
     }
 
     @Override

@@ -236,7 +236,7 @@ public final class HetPulldownCalculator {
                 final int altReadCount = totalBaseCount - refReadCount;
 
                 hetPulldown.add(new SimpleInterval(locus.getSequenceName(), locus.getPosition(), locus.getPosition()),
-                        refReadCount, altReadCount);
+                        refReadCount, altReadCount, baseCounts);
             }
             logger.info("Examined " + totalNumberOfSNPs + " sites.");
             return hetPulldown;

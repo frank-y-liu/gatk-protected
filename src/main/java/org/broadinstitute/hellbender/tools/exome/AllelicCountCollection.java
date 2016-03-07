@@ -14,6 +14,7 @@ import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -63,6 +64,11 @@ public class AllelicCountCollection {
         counts.add(new AllelicCount(interval, refReadCount, altReadCount));
     }
 
+    public void add(final SimpleInterval interval, final int refReadCount, final int altReadCount,
+                    final Map<Character, Integer> baseCounts) {
+        counts.add(new AllelicCount(interval, refReadCount, altReadCount, baseCounts));
+    }
+
     /** Returns an unmodifiable view of the list of AllelicCounts.   */
     public List<AllelicCount> getCounts() {
         return Collections.unmodifiableList(counts);
@@ -81,6 +87,31 @@ public class AllelicCountCollection {
                     final int refReadCount = count.getRefReadCount();
                     final int altReadCount = count.getAltReadCount();
                     dataLine.append(interval.getContig()).append(interval.getEnd(), refReadCount, altReadCount);
+                })) {
+            writer.writeAllRecords(counts);
+        } catch (final IOException e) {
+            throw new UserException.CouldNotCreateOutputFile(outputFile, e);
+        }
+    }
+
+    /**
+     * Writes out (sequence, position, reference count, alternate count) to specified file.
+     * @param outputFile    file to write to (if it exists, it will be overwritten)
+     */
+    public void writeWithBaseCounts(final File outputFile) {
+        try (final TableWriter<AllelicCount> writer = TableUtils.writer(outputFile,
+                new TableColumnCollection(AllelicCountTableColumns.COLUMN_NAME_ARRAY_WITH_BASE_COUNTS),
+                //lambda for filling an initially empty DataLine
+                (count, dataLine) -> {
+                    final Interval interval = count.getInterval();
+                    final int refReadCount = count.getRefReadCount();
+                    final int altReadCount = count.getAltReadCount();
+                    final int aCount = count.getBaseCount('A');
+                    final int cCount = count.getBaseCount('C');
+                    final int gCount = count.getBaseCount('G');
+                    final int tCount = count.getBaseCount('T');
+                    dataLine.append(interval.getContig())
+                            .append(interval.getEnd(), refReadCount, altReadCount, aCount, cCount, gCount, tCount);
                 })) {
             writer.writeAllRecords(counts);
         } catch (final IOException e) {
