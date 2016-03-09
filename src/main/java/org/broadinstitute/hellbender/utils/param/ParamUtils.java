@@ -107,6 +107,20 @@ public class ParamUtils {
     }
 
     /**
+     * Checks that the input int is positive or zero and returns the same value or throws an {@link IllegalArgumentException}
+     * @param val value to check
+     * @param message the text message that would be pass to the exception thrown
+     * @return the same value
+     * @throws IllegalArgumentException
+     */
+    public static int isPositiveOrZero(final int val, final String message) {
+        if (!(val >= 0)){
+            throw new IllegalArgumentException(message);
+        }
+        return val;
+    }
+
+    /**
      * Checks that the  input is positive or zero and returns the same value or throws an {@link IllegalArgumentException}
      * @param val value to check
      * @param message the text message that would be pass to the exception thrown

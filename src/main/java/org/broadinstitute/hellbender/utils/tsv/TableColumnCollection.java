@@ -250,6 +250,8 @@ public final class TableColumnCollection {
         return matchesAll(0, names) && names.length == this.names.size();
     }
 
+
+
     /**
      * Returns the number of columns.
      *
@@ -338,4 +340,6 @@ public final class TableColumnCollection {
         }
         return columnNames;
     }
+
+
 }

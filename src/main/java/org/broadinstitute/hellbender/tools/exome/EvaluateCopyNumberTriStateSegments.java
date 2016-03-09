@@ -51,8 +51,16 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
     public static final String OVERALL_SUMMARY_LINE_FULL_NAME = "includeOverallSummaryOutputLine";
     public static final String OVERALL_SUMMARY_SAMPLE_SHORT_NAME = "overallSample";
     public static final String OVERALL_SUMMARY_SAMPLE_FULL_NAME = "overallSampleName";
+    public static final String FREQUENCY_FILE_SHORT_NAME = "frequencies";
+    public static final String FREQUENCY_FILE_FULL_NAME = "frequenciesFile";
+    public static final String FREQUENCY_SMOOTHING_SHORT_NAME = "smooth";
+    public static final String FREQUENCY_SMOOTHING_FULL_NAME = "frequencySmoothing";
+
+    public static final String FILTERS_SHORT_NAME = "filter";
+    public static final String FILTERS_FULL_NAME = "applyFilter";
 
     public static final String DEFAULT_OVERALL_SUMMARY_SAMPLE_NAME = "ALL";
+    public static final double DEFAULT_FREQUENCY_SMOOTHING = 1.0;
 
     @ArgumentCollection
     protected TargetArgumentCollection targetArguments = new TargetArgumentCollection();
@@ -63,6 +71,15 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
             fullName = CALLS_FILE_FULL_NAME,
             optional = false)
     protected File callsFile;
+
+
+    @Argument(
+            doc = "File containing true event frequency",
+            shortName = FREQUENCY_FILE_SHORT_NAME,
+            fullName = FREQUENCY_FILE_FULL_NAME,
+            optional = false
+    )
+    protected File frequenciesFile;
 
     @Argument(
             doc = "File containing true events",
@@ -120,10 +137,19 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
     )
     protected String overallSampleSummaryRecordSampleName = DEFAULT_OVERALL_SUMMARY_SAMPLE_NAME;
 
+    @Argument(
+            doc = "Frequency smoothing constant",
+            shortName = FREQUENCY_SMOOTHING_SHORT_NAME,
+            fullName = FREQUENCY_SMOOTHING_FULL_NAME,
+            optional = true
+    )
+    protected double frequencySmoothing = DEFAULT_FREQUENCY_SMOOTHING;
+
     @Override
     protected Object doWork() {
         final Set<String> samples = composeSetOfSamplesToEvaluate();
         final TargetCollection<Target> targets = targetArguments.readTargetCollection(false);
+        final IntervalsSkipList<CopyNumberTriStateFrequencies> frequencies = readFrequencies();
 
         SummaryOutputWriter sampleSummaryOutputWriter = null;
         SegmentDetailOutputWriter segmentDetailOutputWriter = null;
@@ -131,7 +157,7 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
             sampleSummaryOutputWriter = createSampleSummaryOutputWriter();
             segmentDetailOutputWriter = createSegmentDetailOutputWriter();
             for (final String sample : samples) {
-                doWorkPerSample(sample, targets, sampleSummaryOutputWriter, segmentDetailOutputWriter);
+                doWorkPerSample(sample, targets, sampleSummaryOutputWriter, segmentDetailOutputWriter, frequencies);
             }
             writeOverallSummaryRecordIfApplies(sampleSummaryOutputWriter);
             closeOutputWriters(sampleSummaryOutputWriter, segmentDetailOutputWriter, true);
@@ -140,6 +166,18 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
             throw ex;
         }
         return "SUCCESS";
+    }
+
+    private IntervalsSkipList<CopyNumberTriStateFrequencies> readFrequencies() {
+        if (frequenciesFile == null) {
+            return new IntervalsSkipList<>(Collections.emptyList());
+        } else {
+            try (final CopyNumberTriStateFrequenciesReader reader = new CopyNumberTriStateFrequenciesReader(frequenciesFile)) {
+                return new IntervalsSkipList<>(reader.stream().collect(Collectors.toList()));
+            } catch (final IOException ex) {
+                throw new UserException.CouldNotReadInputFile(frequenciesFile);
+            }
+        }
     }
 
     private void writeOverallSummaryRecordIfApplies(final SummaryOutputWriter sampleSummaryOutputWriter) {
@@ -207,7 +245,8 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
     private void doWorkPerSample(final String sample,
                                  final TargetCollection<Target> targets,
                                  final SummaryOutputWriter summaryOutputWriter,
-                                 final SegmentDetailOutputWriter segmentDetailOutputWriter) {
+                                 final SegmentDetailOutputWriter segmentDetailOutputWriter,
+                                 final IntervalsSkipList<CopyNumberTriStateFrequencies> frequencies) {
         final List<CopyNumberTriStateSegment> truthSegments =
                 readRelevantSegments(sample, truthFile, targets);
         final List<CopyNumberTriStateSegment> calledSegments =
@@ -221,19 +260,21 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
         final SampleSummaryOutputRecord sampleSummaryOutputRecord = new SampleSummaryOutputRecord(sample);
         // Iterate over truth calls and do most of the counting.
         for (final CopyNumberTriStateSegment truthSegment : truthSegments) {
+            final int targetCount = targets.targetCount(truthSegment);
             final List<CopyNumberTriStateSegment> overlappingCalls =
                     indexedCalledSegments.getOverlapping(truthSegment.getInterval());
+            final CopyNumberTriStateFrequencies frequency = determineBestFrequencyRecordForInterval(truthSegment.getInterval(), frequencies);
             if (overlappingCalls.isEmpty()) {
                 sampleSummaryOutputRecord.falseNegative++;
-                records.add(SegmentDetailOutputRecord.falseNegative(sample, truthSegment));
+                records.add(SegmentDetailOutputRecord.falseNegative(sample, targetCount, truthSegment, frequency));
             } else if (isMixedCall(overlappingCalls)) {
                 sampleSummaryOutputRecord.mixedPositive++;
-                records.add(SegmentDetailOutputRecord.otherPositive(sample, EvaluationClass.MIXED_POSITIVE, truthSegment, overlappingCalls));
+                records.add(SegmentDetailOutputRecord.otherPositive(sample, targetCount, EvaluationClass.MIXED_POSITIVE, truthSegment, overlappingCalls, frequency));
             } else if (overlappingCalls.get(0).getCall() == truthSegment.getCall()) {
                 sampleSummaryOutputRecord.truePositive++;
-                records.add(SegmentDetailOutputRecord.otherPositive(sample, EvaluationClass.TRUE_POSITIVE, truthSegment, overlappingCalls));
+                records.add(SegmentDetailOutputRecord.otherPositive(sample, targetCount, EvaluationClass.TRUE_POSITIVE, truthSegment, overlappingCalls, frequency));
             } else {
-                records.add(SegmentDetailOutputRecord.otherPositive(sample, EvaluationClass.DISCORDANT_POSITIVE, truthSegment, overlappingCalls));
+                records.add(SegmentDetailOutputRecord.otherPositive(sample, targetCount, EvaluationClass.DISCORDANT_POSITIVE, truthSegment, overlappingCalls, frequency));
                 sampleSummaryOutputRecord.discordantPositive++;
             }
         }
@@ -246,7 +287,7 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
             final List<CopyNumberTriStateSegment> overlappingTruth =
                     indexedTruthSegments.getOverlapping(callSegment.getInterval());
             if (overlappingTruth.isEmpty()) {
-                records.add(SegmentDetailOutputRecord.unknownPositive(sample, callSegment));
+                records.add(SegmentDetailOutputRecord.unknownPositive(sample, targets.targetCount(callSegment), callSegment, null));
                 sampleSummaryOutputRecord.unknownPositive++;
             }
         }
@@ -255,6 +296,49 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
                 .sorted(Comparator.comparing(SegmentDetailOutputRecord::getInterval,
                         IntervalUtils.LEXICOGRAPHICAL_ORDER_COMPARATOR))
                 .forEach(r -> writeSegmentDetailOutput(segmentDetailOutputWriter, r));
+        writeSampleSummaryRecord(summaryOutputWriter, sampleSummaryOutputRecord);
+    }
+
+    /**
+     * From all the overlapping frequencies object gets the one that best overlaps the given interval.
+     *
+     * <p>
+     *     The "best" overlapping frequency object is the one where the ratio of the overlapping region length and
+     *     the union region length is the largest. In case of a tie, is then the one with largest non-neutral copy number
+     *     frequencies ({@code 1.0 - neutral copy frequency}).
+     * </p>
+     *
+     * @param interval the target interval.
+     * @param frequencies the potential overlapping frequency objects.
+     * @return {@code null} if there is no overlapping frequencies objects.
+     */
+    private CopyNumberTriStateFrequencies determineBestFrequencyRecordForInterval(final SimpleInterval interval,
+                                                                                        final IntervalsSkipList<CopyNumberTriStateFrequencies> frequencies) {
+        final List<CopyNumberTriStateFrequencies> overlapping = frequencies.getOverlapping(interval);
+        if (overlapping.isEmpty()) {
+            return null;
+        } else if (overlapping.size() == 1) {  // quick short cut for the trivial case of one overlapping frequency object.
+            return overlapping.get(0);
+        } else {
+            final Comparator<CopyNumberTriStateFrequencies> bestMatching = (a, b) -> {
+                final double aOverlapOverUnionSize = overlapOverUnionSizeRatio(interval, a);
+                final double bOverlapOverUnionSize = overlapOverUnionSizeRatio(interval, b);
+                final int ratioCompare  = Double.compare(bOverlapOverUnionSize, aOverlapOverUnionSize);
+                if (ratioCompare != 0) {
+                    return ratioCompare;
+                } else {
+                    return Double.compare(b.frequencyFor(CopyNumberTriState.NEUTRAL, frequencySmoothing),
+                            a.frequencyFor(CopyNumberTriState.NEUTRAL, frequencySmoothing));
+                }
+            };
+            return overlapping.stream().sorted(bestMatching).findFirst().get();
+        }
+    }
+
+    private double overlapOverUnionSizeRatio(SimpleInterval interval, CopyNumberTriStateFrequencies a) {
+        final int aOverlapSize = Math.min(a.getEnd(), interval.getEnd()) - Math.max(a.getStart(), interval.getStart()) + 1;
+        final int aUnionSize = Math.max(a.getEnd(), interval.getEnd()) - Math.min(a.getStart(), interval.getStart()) + 1;
+        return aOverlapSize / (double) aUnionSize;
     }
 
     private void writeSegmentDetailOutput(final SegmentDetailOutputWriter segmentDetailOutputWriter, final SegmentDetailOutputRecord segmentDetailOutputRecord) {
@@ -434,9 +518,13 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
         private final List<CopyNumberTriStateSegment> truths;
         private final EvaluationClass evaluationClass;
         private final SimpleInterval interval;
+        private final int targetCount;
+        private final double deletionFrequency;
+        private final double duplicationFrequency;
 
-        private SegmentDetailOutputRecord(final String sample, final EvaluationClass evaluationClass,
-                                          final List<CopyNumberTriStateSegment> calls, final List<CopyNumberTriStateSegment> truths) {
+        private SegmentDetailOutputRecord(final String sample, int targetCount, final EvaluationClass evaluationClass,
+                                          final List<CopyNumberTriStateSegment> calls, final List<CopyNumberTriStateSegment> truths,
+                                          final CopyNumberTriStateFrequencies frequencies) {
             this.sample = Utils.nonNull(sample);
             this.evaluationClass = Utils.nonNull(evaluationClass);
             this.calls = Utils.nonNull(calls);
@@ -448,25 +536,28 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
             } else {
                 throw new IllegalArgumentException("either the truth or the call list must have exactly one element");
             }
+            this.targetCount = targetCount;
+            this.deletionFrequency = frequencies == null ? Double.NaN : frequencies.frequencyFor(CopyNumberTriState.DELETION, 1.0);
+            this.duplicationFrequency = frequencies == null ? Double.NaN : frequencies.frequencyFor(CopyNumberTriState.DUPLICATION, 1.0);
         }
 
         public SimpleInterval getInterval() {
             return interval;
         }
 
-        private static SegmentDetailOutputRecord falseNegative(final String sample, final CopyNumberTriStateSegment truth) {
-            return new SegmentDetailOutputRecord(sample, EvaluationClass.FALSE_NEGATIVE,
-                    Collections.emptyList(), Collections.singletonList(Utils.nonNull(truth)));
+        private static SegmentDetailOutputRecord falseNegative(final String sample, final int targetCount, final CopyNumberTriStateSegment truth, final CopyNumberTriStateFrequencies frequencies) {
+            return new SegmentDetailOutputRecord(sample, targetCount, EvaluationClass.FALSE_NEGATIVE,
+                    Collections.emptyList(), Collections.singletonList(Utils.nonNull(truth)), frequencies);
         }
 
-        private static SegmentDetailOutputRecord unknownPositive(final String sample, final CopyNumberTriStateSegment call) {
-            return new SegmentDetailOutputRecord(sample, EvaluationClass.UNKNOWN_POSITIVE,
-                    Collections.singletonList(Utils.nonNull(call)), Collections.emptyList());
+        private static SegmentDetailOutputRecord unknownPositive(final String sample, final int targetCount, final CopyNumberTriStateSegment call, final CopyNumberTriStateFrequencies frequencies) {
+            return new SegmentDetailOutputRecord(sample, targetCount, EvaluationClass.UNKNOWN_POSITIVE,
+                    Collections.singletonList(Utils.nonNull(call)), Collections.emptyList(), frequencies);
         }
 
-        private static SegmentDetailOutputRecord otherPositive(final String sample, final EvaluationClass positiveClass,
-                                                        final CopyNumberTriStateSegment truth, final List<CopyNumberTriStateSegment> calls) {
-            return new SegmentDetailOutputRecord(sample, positiveClass, Utils.nonNull(calls), Collections.singletonList(Utils.nonNull(truth)));
+        private static SegmentDetailOutputRecord otherPositive(final String sample, final int targetCount, final EvaluationClass positiveClass,
+                                                        final CopyNumberTriStateSegment truth, final List<CopyNumberTriStateSegment> calls, final CopyNumberTriStateFrequencies frequencies) {
+            return new SegmentDetailOutputRecord(sample, targetCount, positiveClass, Utils.nonNull(calls), Collections.singletonList(Utils.nonNull(truth)), frequencies);
         }
 
         @Override
@@ -529,16 +620,23 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
         private static final String CONTIG_COLUMN = "CONTIG";
         private static final String START_COLUMN  = "START";
         private static final String END_COLUMN    = "END";
+        private static final String TARGET_COUNT_COLUMN = "NTARGETS";
         private static final String TRUTH_COLUMN  = "TRUTH";
         private static final String CALL_COLUMN   = "CALL";
+        private static final String DELETION_FREQUENCY = "DELETION_FREQUENCY";
+        private static final String DUPLICATION_FREQUENCY = "DUPLICATION_FREQUENCY";
+
         private static final TableColumnCollection COLUMNS = new TableColumnCollection(
                 SAMPLE_NAME_COLUMN,
                 EVALUATION_CLASS_COLUMN,
                 CONTIG_COLUMN,
                 START_COLUMN,
                 END_COLUMN,
+                TARGET_COUNT_COLUMN,
                 TRUTH_COLUMN,
-                CALL_COLUMN
+                CALL_COLUMN,
+                DELETION_FREQUENCY,
+                DUPLICATION_FREQUENCY
         );
 
         private static final String SEGMENT_SEPARATOR = ";";
@@ -566,8 +664,11 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
                     .append(record.interval.getContig())
                     .append(record.interval.getStart())
                     .append(record.interval.getEnd())
+                    .append(record.targetCount)
                     .append(composeSegmentsString(record.truths))
-                    .append(composeSegmentsString(record.calls));
+                    .append(composeSegmentsString(record.calls))
+                    .append(record.deletionFrequency)
+                    .append(record.duplicationFrequency);
 
         }
 

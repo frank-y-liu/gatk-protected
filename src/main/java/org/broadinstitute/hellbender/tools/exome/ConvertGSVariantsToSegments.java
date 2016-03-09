@@ -3,6 +3,7 @@ package org.broadinstitute.hellbender.tools.exome;
 import htsjdk.variant.variantcontext.Genotype;
 import htsjdk.variant.variantcontext.VariantContext;
 import htsjdk.variant.vcf.VCFConstants;
+import org.apache.commons.io.output.NullWriter;
 import org.apache.commons.lang.math.IntRange;
 import org.broadinstitute.hellbender.cmdline.Argument;
 import org.broadinstitute.hellbender.cmdline.ArgumentCollection;
@@ -19,9 +20,13 @@ import org.broadinstitute.hellbender.utils.MathUtils;
 import org.broadinstitute.hellbender.utils.QualityUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.hmm.CopyNumberTriState;
+import org.broadinstitute.hellbender.utils.tsv.TableWriter;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Stream;
 
 /**
@@ -40,6 +45,8 @@ public final class ConvertGSVariantsToSegments extends VariantWalker {
     public static final String OUTPUT_FILE_FULL_NAME = StandardArgumentDefinitions.OUTPUT_LONG_NAME;
     public static final String NEUTRAL_COPY_NUMBER_SHORT_NAME = "neutral";
     public static final String NEUTRAL_COPY_NUMBER_FULL_NAME = "neutralCopyNumber";
+    public static final String OUTPUT_FREQUENCY_SHORT_NAME = "frequencies";
+    public static final String OUTPUT_FREQUENCY_FULL_NAME = "frequenciesOutputFile";
 
     public static final int NEUTRAL_COPY_NUMBER_DEFAULT = 2;
 
@@ -60,6 +67,14 @@ public final class ConvertGSVariantsToSegments extends VariantWalker {
     protected File outputFile;
 
     @Argument(
+            doc = "Frequencies output file",
+            shortName = OUTPUT_FREQUENCY_SHORT_NAME,
+            fullName = OUTPUT_FREQUENCY_FULL_NAME,
+            optional = true
+    )
+    protected File frequenciesFile;
+
+    @Argument(
             doc = "Reference copy number",
             shortName = NEUTRAL_COPY_NUMBER_SHORT_NAME,
             fullName = NEUTRAL_COPY_NUMBER_FULL_NAME,
@@ -71,6 +86,8 @@ public final class ConvertGSVariantsToSegments extends VariantWalker {
 
     protected TargetCollection<Target> targets;
 
+    protected CopyNumberTriStateFrequenciesWriter frequenciesWriter;
+
     @Override
     public void onTraversalStart() {
         try {
@@ -79,19 +96,37 @@ public final class ConvertGSVariantsToSegments extends VariantWalker {
             throw new UserException.CouldNotCreateOutputFile(outputFile, ex);
         }
         targets = targetArguments.readTargetCollection(false);
+
+        try {
+            frequenciesWriter = new CopyNumberTriStateFrequenciesWriter(frequenciesFile != null ? new FileWriter(frequenciesFile) : new NullWriter());
+        } catch (final IOException ex) {
+            throw new UserException.CouldNotCreateOutputFile(frequenciesFile, ex);
+        }
+    }
+
+    private void closeOutputWriter(final TableWriter<?> writer, final File file, final List<RuntimeException> exceptions) {
+        if (writer == null) {
+            return;
+        }
+        try {
+            writer.close();
+        } catch (final Exception ex) {
+            exceptions.add(new UserException.CouldNotCreateOutputFile(file, ex));
+        }
     }
 
     @Override
     public Object onTraversalDone() {
-        try {
-            if (outputWriter != null) {
-                outputWriter.close();
-                outputWriter = null;
+        final List<RuntimeException> exceptionList = new ArrayList<>(2);
+        closeOutputWriter(outputWriter, outputFile, exceptionList);
+        closeOutputWriter(frequenciesWriter, frequenciesFile, exceptionList);
+        if (!exceptionList.isEmpty()) {
+            for (final Exception ex : exceptionList) {
+                logger.error(ex.getMessage());
             }
-        } catch (final IOException ex) {
-            throw new UserException.CouldNotCreateOutputFile(outputFile, ex);
+            throw exceptionList.get(0);
         }
-        return null;
+        return "SUCCESS";
     }
 
     @Override
@@ -110,12 +145,13 @@ public final class ConvertGSVariantsToSegments extends VariantWalker {
                       final FeatureContext featureContext) {
         final SimpleInterval interval = new SimpleInterval(variant);
         final int targetCount = targets.indexRange(interval).size();
-
+        final int[] callCounts = new int[CopyNumberTriState.values().length];
         for (final Genotype genotype : variant.getGenotypes().iterateInSampleNameOrder()) {
             final String sample = genotype.getSampleName();
             final double mean = doubleFrom(genotype.getExtendedAttribute(GS_COPY_NUMBER_FRACTION));
             final int copyNumber = intFrom(genotype.getExtendedAttribute(GS_COPY_NUMBER_FORMAT));
             final CopyNumberTriState call = copyNumber == neutralCopyNumber ? CopyNumberTriState.NEUTRAL : (copyNumber < neutralCopyNumber) ? CopyNumberTriState.DELETION : CopyNumberTriState.DUPLICATION;
+            callCounts[call.ordinal()]++;
             final double[] probs = doubleArrayFrom(genotype.getExtendedAttribute(GS_COPY_NUMBER_POSTERIOR));
             final double log10PostProbCall = calculateLog10CallQuality(probs, call);
             final double log10PostProbNonRef = calculateLog10CallQualityNonRef(probs);
@@ -143,6 +179,16 @@ public final class ConvertGSVariantsToSegments extends VariantWalker {
                 outputWriter.writeRecord(record);
             } catch (final IOException ex) {
                 throw new UserException.CouldNotCreateOutputFile(outputFile, ex);
+            }
+        }
+        if (frequenciesWriter != null) {
+            try {
+                frequenciesWriter.writeRecord(new CopyNumberTriStateFrequencies(interval,
+                        callCounts[CopyNumberTriState.DELETION.ordinal()],
+                        callCounts[CopyNumberTriState.NEUTRAL.ordinal()],
+                        callCounts[CopyNumberTriState.DUPLICATION.ordinal()]));
+            } catch (final IOException ex) {
+              throw new UserException.CouldNotCreateOutputFile(frequenciesFile, ex);
             }
         }
     }
