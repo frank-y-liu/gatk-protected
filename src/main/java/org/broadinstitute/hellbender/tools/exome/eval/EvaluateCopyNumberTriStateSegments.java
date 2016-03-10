@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.tools.exome;
+package org.broadinstitute.hellbender.tools.exome.eval;
 
 import org.broadinstitute.hellbender.cmdline.Argument;
 import org.broadinstitute.hellbender.cmdline.ArgumentCollection;
@@ -6,9 +6,9 @@ import org.broadinstitute.hellbender.cmdline.CommandLineProgram;
 import org.broadinstitute.hellbender.cmdline.CommandLineProgramProperties;
 import org.broadinstitute.hellbender.cmdline.programgroups.CopyNumberProgramGroup;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.tools.exome.*;
 import org.broadinstitute.hellbender.utils.IntervalUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
-import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.collections.IntervalsSkipList;
 import org.broadinstitute.hellbender.utils.hmm.CopyNumberTriState;
 import org.broadinstitute.hellbender.utils.tsv.DataLine;
@@ -21,7 +21,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Tool to evaluate the output of {@link DiscoverCopyNumberTriStateSegments}.
@@ -56,14 +55,14 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
     public static final String FREQUENCY_SMOOTHING_SHORT_NAME = "smooth";
     public static final String FREQUENCY_SMOOTHING_FULL_NAME = "frequencySmoothing";
 
-    public static final String FILTERS_SHORT_NAME = "filter";
-    public static final String FILTERS_FULL_NAME = "applyFilter";
-
     public static final String DEFAULT_OVERALL_SUMMARY_SAMPLE_NAME = "ALL";
     public static final double DEFAULT_FREQUENCY_SMOOTHING = 1.0;
 
     @ArgumentCollection
     protected TargetArgumentCollection targetArguments = new TargetArgumentCollection();
+
+    @ArgumentCollection
+    protected CallFiltersCollection filterArguments = new CallFiltersCollection();
 
     @Argument(
             doc = "File contained the called segments",
@@ -71,7 +70,6 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
             fullName = CALLS_FILE_FULL_NAME,
             optional = false)
     protected File callsFile;
-
 
     @Argument(
             doc = "File containing true event frequency",
@@ -103,7 +101,6 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
             optional = true
     )
     protected File sampleListFile = null;
-
 
     @Argument(
             doc = "Sample summary output",
@@ -152,7 +149,7 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
         final IntervalsSkipList<CopyNumberTriStateFrequencies> frequencies = readFrequencies();
 
         SummaryOutputWriter sampleSummaryOutputWriter = null;
-        SegmentDetailOutputWriter segmentDetailOutputWriter = null;
+        EvaluationSiteRecordWriter segmentDetailOutputWriter = null;
         try {
             sampleSummaryOutputWriter = createSampleSummaryOutputWriter();
             segmentDetailOutputWriter = createSegmentDetailOutputWriter();
@@ -194,12 +191,12 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
         }
     }
 
-    private SegmentDetailOutputWriter createSegmentDetailOutputWriter() {
+    private EvaluationSiteRecordWriter createSegmentDetailOutputWriter() {
         if (segmentDetailOutputFile == null) {
             return null;
         } else {
             try {
-                return new SegmentDetailOutputWriter(segmentDetailOutputFile);
+                return new EvaluationSiteRecordWriter(segmentDetailOutputFile);
             } catch (final IOException ex) {
                 throw new UserException.CouldNotCreateOutputFile(sampleSummaryOutputFile, ex);
             }
@@ -207,7 +204,7 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
     }
 
     private void closeOutputWriters(final SummaryOutputWriter sampleSummaryOutputWriter,
-                                    final SegmentDetailOutputWriter segmentDetailOutputWriter, final boolean throwAnyException) {
+                                    final EvaluationSiteRecordWriter segmentDetailOutputWriter, final boolean throwAnyException) {
 
         final List<UserException> exceptions = new ArrayList<>(2);
         closeOutputWriter(sampleSummaryOutputWriter, sampleSummaryOutputFile, exceptions);
@@ -245,7 +242,7 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
     private void doWorkPerSample(final String sample,
                                  final TargetCollection<Target> targets,
                                  final SummaryOutputWriter summaryOutputWriter,
-                                 final SegmentDetailOutputWriter segmentDetailOutputWriter,
+                                 final EvaluationSiteRecordWriter segmentDetailOutputWriter,
                                  final IntervalsSkipList<CopyNumberTriStateFrequencies> frequencies) {
         final List<CopyNumberTriStateSegment> truthSegments =
                 readRelevantSegments(sample, truthFile, targets);
@@ -255,7 +252,7 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
         final IntervalsSkipList<CopyNumberTriStateSegment> indexedCalledSegments =
                 new IntervalsSkipList<>(calledSegments);
 
-        final List<SegmentDetailOutputRecord> records = new ArrayList<>(truthSegments.size());
+        final List<EvaluationSiteRecord> records = new ArrayList<>(truthSegments.size());
 
         final SampleSummaryOutputRecord sampleSummaryOutputRecord = new SampleSummaryOutputRecord(sample);
         // Iterate over truth calls and do most of the counting.
@@ -266,15 +263,15 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
             final CopyNumberTriStateFrequencies frequency = determineBestFrequencyRecordForInterval(truthSegment.getInterval(), frequencies);
             if (overlappingCalls.isEmpty()) {
                 sampleSummaryOutputRecord.falseNegative++;
-                records.add(SegmentDetailOutputRecord.falseNegative(sample, targetCount, truthSegment, frequency));
+                records.add(EvaluationSiteRecord.falseNegative(sample, targetCount, truthSegment, frequency));
             } else if (isMixedCall(overlappingCalls)) {
                 sampleSummaryOutputRecord.mixedPositive++;
-                records.add(SegmentDetailOutputRecord.otherPositive(sample, targetCount, EvaluationClass.MIXED_POSITIVE, truthSegment, overlappingCalls, frequency));
+                records.add(EvaluationSiteRecord.otherPositive(sample, targetCount, EvaluationClass.MIXED_POSITIVE, truthSegment, overlappingCalls, frequency));
             } else if (overlappingCalls.get(0).getCall() == truthSegment.getCall()) {
                 sampleSummaryOutputRecord.truePositive++;
-                records.add(SegmentDetailOutputRecord.otherPositive(sample, targetCount, EvaluationClass.TRUE_POSITIVE, truthSegment, overlappingCalls, frequency));
+                records.add(EvaluationSiteRecord.otherPositive(sample, targetCount, EvaluationClass.TRUE_POSITIVE, truthSegment, overlappingCalls, frequency));
             } else {
-                records.add(SegmentDetailOutputRecord.otherPositive(sample, targetCount, EvaluationClass.DISCORDANT_POSITIVE, truthSegment, overlappingCalls, frequency));
+                records.add(EvaluationSiteRecord.otherPositive(sample, targetCount, EvaluationClass.DISCORDANT_POSITIVE, truthSegment, overlappingCalls, frequency));
                 sampleSummaryOutputRecord.discordantPositive++;
             }
         }
@@ -287,15 +284,15 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
             final List<CopyNumberTriStateSegment> overlappingTruth =
                     indexedTruthSegments.getOverlapping(callSegment.getInterval());
             if (overlappingTruth.isEmpty()) {
-                records.add(SegmentDetailOutputRecord.unknownPositive(sample, targets.targetCount(callSegment), callSegment, null));
+                records.add(EvaluationSiteRecord.unknownPositive(sample, targets.targetCount(callSegment), callSegment, null));
                 sampleSummaryOutputRecord.unknownPositive++;
             }
         }
 
         records.stream()
-                .sorted(Comparator.comparing(SegmentDetailOutputRecord::getInterval,
+                .sorted(Comparator.comparing(EvaluationSiteRecord::getInterval,
                         IntervalUtils.LEXICOGRAPHICAL_ORDER_COMPARATOR))
-                .forEach(r -> writeSegmentDetailOutput(segmentDetailOutputWriter, r));
+                .forEach(r -> writeSegmentDetailOutput(segmentDetailOutputWriter, filterArguments.applyFiltersOn(r)));
         writeSampleSummaryRecord(summaryOutputWriter, sampleSummaryOutputRecord);
     }
 
@@ -320,31 +317,18 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
         } else if (overlapping.size() == 1) {  // quick short cut for the trivial case of one overlapping frequency object.
             return overlapping.get(0);
         } else {
-            final Comparator<CopyNumberTriStateFrequencies> bestMatching = (a, b) -> {
-                final double aOverlapOverUnionSize = overlapOverUnionSizeRatio(interval, a);
-                final double bOverlapOverUnionSize = overlapOverUnionSizeRatio(interval, b);
-                final int ratioCompare  = Double.compare(bOverlapOverUnionSize, aOverlapOverUnionSize);
-                if (ratioCompare != 0) {
-                    return ratioCompare;
-                } else {
-                    return Double.compare(b.frequencyFor(CopyNumberTriState.NEUTRAL, frequencySmoothing),
-                            a.frequencyFor(CopyNumberTriState.NEUTRAL, frequencySmoothing));
-                }
-            };
+
+            final Comparator<CopyNumberTriStateFrequencies> bestOverlapping = EvaluationUtils.comparingOverlapToUnionRatio(interval);
+            final Comparator<CopyNumberTriStateFrequencies> bestMatching = bestOverlapping
+                .thenComparing(a -> a.frequencyFor(CopyNumberTriState.NEUTRAL, frequencySmoothing));
             return overlapping.stream().sorted(bestMatching).findFirst().get();
         }
     }
 
-    private double overlapOverUnionSizeRatio(SimpleInterval interval, CopyNumberTriStateFrequencies a) {
-        final int aOverlapSize = Math.min(a.getEnd(), interval.getEnd()) - Math.max(a.getStart(), interval.getStart()) + 1;
-        final int aUnionSize = Math.max(a.getEnd(), interval.getEnd()) - Math.min(a.getStart(), interval.getStart()) + 1;
-        return aOverlapSize / (double) aUnionSize;
-    }
-
-    private void writeSegmentDetailOutput(final SegmentDetailOutputWriter segmentDetailOutputWriter, final SegmentDetailOutputRecord segmentDetailOutputRecord) {
+    private void writeSegmentDetailOutput(final EvaluationSiteRecordWriter segmentDetailOutputWriter, final EvaluationSiteRecord evaluationSiteRecord) {
         if (segmentDetailOutputWriter != null) {
             try {
-                segmentDetailOutputWriter.writeRecord(segmentDetailOutputRecord);
+                segmentDetailOutputWriter.writeRecord(evaluationSiteRecord);
             } catch (final IOException ex) {
                 throw new UserException.CouldNotCreateOutputFile(segmentDetailOutputFile, ex);
             }
@@ -366,7 +350,7 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
         if (overlappingCalls.size() <= 1) {
             return false;
         } else {
-            final CopyNumberTriState candidateCall = overlappingCalls.get(0).call;
+            final CopyNumberTriState candidateCall = overlappingCalls.get(0).getCall();
             return overlappingCalls.stream().anyMatch(s -> s.getCall() != candidateCall);
         }
     }
@@ -508,181 +492,6 @@ public final class EvaluateCopyNumberTriStateSegments extends CommandLineProgram
 
         protected void writeOverallRecord() throws IOException {
             writeRecord(overallRecord);
-        }
-    }
-
-    private static class SegmentDetailOutputRecord {
-
-        private final String sample;
-        private final List<CopyNumberTriStateSegment> calls;
-        private final List<CopyNumberTriStateSegment> truths;
-        private final EvaluationClass evaluationClass;
-        private final SimpleInterval interval;
-        private final int targetCount;
-        private final double deletionFrequency;
-        private final double duplicationFrequency;
-
-        private SegmentDetailOutputRecord(final String sample, int targetCount, final EvaluationClass evaluationClass,
-                                          final List<CopyNumberTriStateSegment> calls, final List<CopyNumberTriStateSegment> truths,
-                                          final CopyNumberTriStateFrequencies frequencies) {
-            this.sample = Utils.nonNull(sample);
-            this.evaluationClass = Utils.nonNull(evaluationClass);
-            this.calls = Utils.nonNull(calls);
-            this.truths = Utils.nonNull(truths);
-            if (truths.size() == 1) {
-                interval = truths.get(0).getInterval();
-            } else if (calls.size() == 1) {
-                interval = calls.get(0).getInterval();
-            } else {
-                throw new IllegalArgumentException("either the truth or the call list must have exactly one element");
-            }
-            this.targetCount = targetCount;
-            this.deletionFrequency = frequencies == null ? Double.NaN : frequencies.frequencyFor(CopyNumberTriState.DELETION, 1.0);
-            this.duplicationFrequency = frequencies == null ? Double.NaN : frequencies.frequencyFor(CopyNumberTriState.DUPLICATION, 1.0);
-        }
-
-        public SimpleInterval getInterval() {
-            return interval;
-        }
-
-        private static SegmentDetailOutputRecord falseNegative(final String sample, final int targetCount, final CopyNumberTriStateSegment truth, final CopyNumberTriStateFrequencies frequencies) {
-            return new SegmentDetailOutputRecord(sample, targetCount, EvaluationClass.FALSE_NEGATIVE,
-                    Collections.emptyList(), Collections.singletonList(Utils.nonNull(truth)), frequencies);
-        }
-
-        private static SegmentDetailOutputRecord unknownPositive(final String sample, final int targetCount, final CopyNumberTriStateSegment call, final CopyNumberTriStateFrequencies frequencies) {
-            return new SegmentDetailOutputRecord(sample, targetCount, EvaluationClass.UNKNOWN_POSITIVE,
-                    Collections.singletonList(Utils.nonNull(call)), Collections.emptyList(), frequencies);
-        }
-
-        private static SegmentDetailOutputRecord otherPositive(final String sample, final int targetCount, final EvaluationClass positiveClass,
-                                                        final CopyNumberTriStateSegment truth, final List<CopyNumberTriStateSegment> calls, final CopyNumberTriStateFrequencies frequencies) {
-            return new SegmentDetailOutputRecord(sample, targetCount, positiveClass, Utils.nonNull(calls), Collections.singletonList(Utils.nonNull(truth)), frequencies);
-        }
-
-        @Override
-        public String toString() {
-            return "";
-        }
-    }
-
-    /**
-     * Segment evaluation classes: TP, FN, etc.
-     */
-    public enum EvaluationClass {
-
-        /**
-         * When truth and calls overlap and are all compatible (all are deletion or all are duplication).
-         */
-        TRUE_POSITIVE("TP"),
-
-        /**
-         * When truth does not overlap with any call.
-         */
-        FALSE_NEGATIVE("FN"),
-
-        /**
-         * When truth overlaps with several calls that are discordant amongst them.
-         */
-        MIXED_POSITIVE("MP"),
-
-        /**
-         * When truth overlaps with several calls that are concordant amongst them but
-         * the are discordant with the truth.
-         */
-        DISCORDANT_POSITIVE("DP"),
-
-        /**
-         * When a call does not overall with truth.
-         */
-        UNKNOWN_POSITIVE("UP");
-
-        /**
-         * Short acronym name for the class.
-         */
-        public final String acronym;
-
-
-        EvaluationClass(final String acronym) {
-            this.acronym = acronym;
-        }
-
-        @Override
-        public String toString() {
-            return acronym;
-        }
-    }
-
-    private static class SegmentDetailOutputWriter extends TableWriter<SegmentDetailOutputRecord> {
-
-        private static final String SAMPLE_NAME_COLUMN = "SAMPLE";
-        private static final String EVALUATION_CLASS_COLUMN = "CLASS";
-        private static final String CONTIG_COLUMN = "CONTIG";
-        private static final String START_COLUMN  = "START";
-        private static final String END_COLUMN    = "END";
-        private static final String TARGET_COUNT_COLUMN = "NTARGETS";
-        private static final String TRUTH_COLUMN  = "TRUTH";
-        private static final String CALL_COLUMN   = "CALL";
-        private static final String DELETION_FREQUENCY = "DELETION_FREQUENCY";
-        private static final String DUPLICATION_FREQUENCY = "DUPLICATION_FREQUENCY";
-
-        private static final TableColumnCollection COLUMNS = new TableColumnCollection(
-                SAMPLE_NAME_COLUMN,
-                EVALUATION_CLASS_COLUMN,
-                CONTIG_COLUMN,
-                START_COLUMN,
-                END_COLUMN,
-                TARGET_COUNT_COLUMN,
-                TRUTH_COLUMN,
-                CALL_COLUMN,
-                DELETION_FREQUENCY,
-                DUPLICATION_FREQUENCY
-        );
-
-        private static final String SEGMENT_SEPARATOR = ";";
-        private static final String ATTRIBUTE_SEPARATOR = ":";
-        private static final String NO_SEGMENT_STRING = ".";
-
-        public SegmentDetailOutputWriter(final File file) throws IOException {
-            super(file, COLUMNS);
-            writeComment("Possible classes in the CLASS column: ");
-            for (final EvaluationClass clazz : EvaluationClass.values()) {
-                writeComment(String.format("    %s : %s", clazz.acronym, clazz.name().replace("_", " ")));
-            }
-            writeComment(String.format("Content of %s and %s columns:", TRUTH_COLUMN, CALL_COLUMN));
-            writeComment("   They may contain multiple segment information or none (represented with '.')");
-            writeComment(String.format("   Each segment record is separated with a '%s' and each field in each segment is separated by '%s'", SEGMENT_SEPARATOR, ATTRIBUTE_SEPARATOR));
-            writeComment("   The segments attributes are in this order:");
-            writeComment("       " + String.join(ATTRIBUTE_SEPARATOR, "Start", "End", "Call", "TargetCount", "Mean Cov.", "Std Cov.", "Some Quality", "Start Quality", "End Quality"));
-        }
-
-        @Override
-        protected void composeLine(final SegmentDetailOutputRecord record,
-                                   final DataLine dataLine) {
-            dataLine.append(record.sample)
-                    .append(record.evaluationClass.toString())
-                    .append(record.interval.getContig())
-                    .append(record.interval.getStart())
-                    .append(record.interval.getEnd())
-                    .append(record.targetCount)
-                    .append(composeSegmentsString(record.truths))
-                    .append(composeSegmentsString(record.calls))
-                    .append(record.deletionFrequency)
-                    .append(record.duplicationFrequency);
-
-        }
-
-        private String composeSegmentsString(final List<CopyNumberTriStateSegment> segments) {
-            if (segments.isEmpty()) {
-                return NO_SEGMENT_STRING;
-            } else {
-                return segments.stream()
-                        .map(s ->  Stream.of(s.getStart(), s.getEnd(),
-                                s.getCall().toCallString(), s.getTargetCount(), s.getMean(), s.getStdev(), s.getSomeQuality(),
-                                s.getStartQuality(), s.getEndQuality()).map(Object::toString)
-                                .collect(Collectors.joining(ATTRIBUTE_SEPARATOR)))
-                        .collect(Collectors.joining(SEGMENT_SEPARATOR));
-            }
         }
     }
 
