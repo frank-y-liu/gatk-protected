@@ -82,7 +82,7 @@ public class AllelicCountCollection {
                 new TableColumnCollection(AllelicCountTableColumns.COLUMN_NAME_ARRAY),
                 //lambda for filling an initially empty DataLine
                 (count, dataLine) -> {
-                    final Interval interval = count.getInterval();
+                    final SimpleInterval interval = count.getInterval();
                     final int refReadCount = count.getRefReadCount();
                     final int altReadCount = count.getAltReadCount();
                     dataLine.append(interval.getContig()).append(interval.getEnd(), refReadCount, altReadCount);
