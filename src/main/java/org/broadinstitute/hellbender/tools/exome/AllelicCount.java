@@ -35,8 +35,8 @@ public final class AllelicCount implements Locatable {
     @Override
     public int getEnd() {return interval.getEnd(); }
 
-    public Interval getInterval() {
-        return new Interval(interval.getContig(), interval.getStart(), interval.getEnd());
+    public SimpleInterval getInterval() {
+        return interval;
     }
 
     public int getRefReadCount() {  return refReadCount;        }

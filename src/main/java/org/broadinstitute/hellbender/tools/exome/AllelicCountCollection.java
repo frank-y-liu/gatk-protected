@@ -1,8 +1,11 @@
 package org.broadinstitute.hellbender.tools.exome;
 
+import com.google.common.collect.Sets;
 import htsjdk.samtools.util.Interval;
+import org.apache.commons.lang3.StringUtils;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
+import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.tsv.TableColumnCollection;
 import org.broadinstitute.hellbender.utils.tsv.TableReader;
 import org.broadinstitute.hellbender.utils.tsv.TableUtils;
@@ -11,13 +14,11 @@ import org.broadinstitute.hellbender.utils.tsv.TableWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Simple data structure to pass and read/write List of AllelicCounts.
+ * Simple data structure to pass and read/write a List of {@link AllelicCount} objects.
  *
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
@@ -33,10 +34,14 @@ public class AllelicCountCollection {
      * @param inputFile     file to read from
      */
     public AllelicCountCollection(final File inputFile) {
+        Utils.nonNull(inputFile);
+        Utils.regularReadableUserFile(inputFile);
         try (final TableReader<AllelicCount> reader = TableUtils.reader(inputFile,
                 (columns, formatExceptionFactory) -> {
-                    if (!columns.matchesExactly(AllelicCountTableColumns.COLUMN_NAME_ARRAY))
-                        throw formatExceptionFactory.apply("Bad header");
+                    if (!columns.containsAll(AllelicCountTableColumns.COLUMN_NAME_ARRAY)) {
+                        final Set<String> missingColumns = Sets.difference(new HashSet<>(Arrays.asList(AllelicCountTableColumns.COLUMN_NAME_ARRAY)), new HashSet<>(columns.names()));
+                        throw formatExceptionFactory.apply("Bad header in file.  Not all columns are present.  Missing: " + StringUtils.join(missingColumns, ", "));
+                    }
 
                     // return the lambda to translate dataLines into AllelicCounts.
                     return (dataLine) -> {

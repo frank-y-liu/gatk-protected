@@ -76,7 +76,7 @@ public final class HetPulldownCalculator {
      * @param locus locus
      * @return      map of base-pair counts
      */
-    public static Map<Character,Integer> getPileupBaseCounts(final SamLocusIterator.LocusInfo locus) {
+    public static Map<Character, Integer> getPileupBaseCounts(final SamLocusIterator.LocusInfo locus) {
         int aCount = 0, cCount = 0, gCount = 0, tCount = 0;
 
         for (final SamLocusIterator.RecordAndOffset rec : locus.getRecordAndPositions()) {
@@ -98,7 +98,7 @@ public final class HetPulldownCalculator {
             }
         }
 
-        Map<Character,Integer> baseCounts = new HashMap<>();
+        final Map<Character, Integer> baseCounts = new HashMap<>();
         baseCounts.put('A', aCount);
         baseCounts.put('C', cCount);
         baseCounts.put('G', gCount);
