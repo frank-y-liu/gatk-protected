@@ -107,6 +107,14 @@ public class AllelicCNV extends SparkCommandLineProgram {
     protected File targetSegmentsFile;
 
     @Argument(
+            doc = "Input file for allelic-bias panel of normals.",
+            fullName = ExomeStandardArgumentDefinitions.SEGMENT_FILE_LONG_NAME,
+            shortName = ExomeStandardArgumentDefinitions.SEGMENT_FILE_SHORT_NAME,
+            optional = false
+    )
+    protected File allelicPONFile;
+
+    @Argument(
             doc = "Prefix for output files. Will also be used as sample name if that is not provided.",
             fullName = OUTPUT_PREFIX_LONG_NAME,
             shortName = OUTPUT_PREFIX_SHORT_NAME,
