@@ -1,16 +1,16 @@
 package org.broadinstitute.hellbender.tools.exome.allelefraction;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.exome.AllelicCount;
 import org.broadinstitute.hellbender.tools.exome.AllelicCountCollection;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
-import org.broadinstitute.hellbender.utils.param.ParamUtils;
 
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
+
+import static java.lang.Math.sqrt;
 
 /**
  * Represents the panel of normals used for allele-bias correction.
@@ -18,54 +18,67 @@ import java.util.Map;
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
 public final class AllelicPanelOfNormals {
-    private final Map<SimpleInterval, ReadCountPair> siteToCountPairMap = new HashMap<>();
+    private final Map<SimpleInterval, HyperparameterValues> siteToHyperparameterPairMap = new HashMap<>();
+
+    private final HyperparameterValues mleHyperparameterValues;
 
     public AllelicPanelOfNormals(final File inputFile) {
         Utils.nonNull(inputFile);
         Utils.regularReadableUserFile(inputFile);
 
         final AllelicCountCollection counts = new AllelicCountCollection(inputFile);
+        mleHyperparameterValues = calculateMLEHyperparameterValues(counts);
+
         for (final AllelicCount count : counts.getCounts()) {
             final SimpleInterval site = count.getInterval();
-            final ReadCountPair countPair = new ReadCountPair(count.getRefReadCount(), count.getAltReadCount());
-            if (siteToCountPairMap.containsKey(site)) {
+            final HyperparameterValues hyperparameterValues = new HyperparameterValues(count.getRefReadCount(), count.getAltReadCount());
+            if (siteToHyperparameterPairMap.containsKey(site)) {
                 throw new UserException.BadInput("Input file for allelic panel of normals contains duplicate sites.");
             } else {
-                siteToCountPairMap.put(site, countPair);
+                siteToHyperparameterPairMap.put(site, hyperparameterValues);
             }
         }
     }
 
-    public int getRefReadCount(final SimpleInterval site) {
+    public double getAlpha(final SimpleInterval site) {
         Utils.nonNull(site);
+        return siteToHyperparameterPairMap.getOrDefault(site, mleHyperparameterValues).alpha;
+    }
 
-        if (siteToCountPairMap.containsKey(site)) {
-            return siteToCountPairMap.get(site).getRefReadCount();
-        } else {
-            throw new IllegalArgumentException("Site is not present in the allelic panel of normals.");
+    public double getBeta(final SimpleInterval site) {
+        Utils.nonNull(site);
+        return siteToHyperparameterPairMap.getOrDefault(site, mleHyperparameterValues).beta;
+    }
+
+    private class HyperparameterValues {
+        private final double alpha;
+        private final double beta;
+
+        private HyperparameterValues(final double alpha, final double beta) {
+            this.alpha = alpha;
+            this.beta = beta;
+        }
+
+        private HyperparameterValues(final int r, final int a) {
+            final double f = 0.5;
+            final int n = a + r;
+            final double alpha = mleHyperparameterValues.alpha;
+            final double beta = mleHyperparameterValues.beta;
+            final double w = (1 - f) * (a - alpha + 1) + beta * f;
+            final double lambda0 = (sqrt(w * w + 4 * beta * f * (1 - f) * (r + alpha - 1)) - w) / (2 * beta * (1 - f));
+            final double y = (1 - f)/(f + (1 - f) * lambda0);
+            final double kappa = n * y * y - (r + alpha - 1) / (lambda0 * lambda0);
+            this.alpha = 1 - kappa * lambda0 * lambda0;
+            this.beta = -kappa * lambda0;
         }
     }
 
-    public int getAltReadCount(final SimpleInterval site) {
-        Utils.nonNull(site);
+    private HyperparameterValues calculateMLEHyperparameterValues(final AllelicCountCollection counts) {
+        //TODO MLE alpha beta
 
-        if (siteToCountPairMap.containsKey(site)) {
-            return siteToCountPairMap.get(site).getAltReadCount();
-        } else {
-            throw new IllegalArgumentException("Site is not present in the allelic panel of normals.");
-        }
-    }
+        final double alpha = 0.;
+        final double beta = 0.;
 
-    private class ReadCountPair {
-        private final Pair<Integer, Integer> readCountPair;
-
-        private ReadCountPair(final int refReadCount, final int altReadCount) {
-            ParamUtils.isPositiveOrZero(refReadCount, "Can't construct ReadCountPair with negative read counts.");
-            ParamUtils.isPositiveOrZero(altReadCount, "Can't construct ReadCountPair with negative read counts.");
-            readCountPair = Pair.of(refReadCount, altReadCount);
-        }
-
-        private int getRefReadCount() { return readCountPair.getLeft();  }
-        private int getAltReadCount() { return readCountPair.getRight();  }
+        return new HyperparameterValues(alpha, beta);
     }
 }

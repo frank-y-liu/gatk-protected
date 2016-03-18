@@ -10,6 +10,7 @@ import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.exome.allelefraction.AlleleFractionData;
 import org.broadinstitute.hellbender.tools.exome.allelefraction.AlleleFractionInitializer;
 import org.broadinstitute.hellbender.tools.exome.allelefraction.AlleleFractionState;
+import org.broadinstitute.hellbender.tools.exome.allelefraction.AllelicPanelOfNormals;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 
 import java.io.File;
@@ -219,6 +220,17 @@ public class AllelicCNV extends SparkCommandLineProgram {
         logger.info("Loading input files...");
         final Genome genome = new Genome(targetCoveragesFile, snpCountsFile, sampleName);
 
+        //load allelic-bias panel of normals if provided
+        final boolean useAllelicPON;
+        final AllelicPanelOfNormals allelicPON;
+        if (allelicPONFile != null) {
+            useAllelicPON = true;
+            allelicPON = new AllelicPanelOfNormals(allelicPONFile);
+        } else {
+            useAllelicPON = false;
+            allelicPON = null;
+        }
+
         //load target-coverage segments from input file
         final List<ModeledSegment> targetSegmentsWithCalls =
                 SegmentUtils.readModeledSegmentsFromSegmentFile(targetSegmentsFile);
@@ -246,9 +258,17 @@ public class AllelicCNV extends SparkCommandLineProgram {
         final File segmentedModelFile = new File(outputPrefix + "-" + SMALL_MERGED_SEG_FILE_TAG + ".seg");
         segmentedModel.writeSegmentFileWithNumTargetsAndNumSNPs(segmentedModelFile);
 
-        //initial MCMC model fitting performed by ACNVModeller constructor
-        final ACNVModeller modeller = new ACNVModeller(segmentedModel,
-                numSamplesCopyRatio, numBurnInCopyRatio, numSamplesAlleleFraction, numBurnInAlleleFraction, ctx);
+        //initial MCMC model fitting performed by ACNVModeller constructor\
+        final ACNVModeller modeller;
+        if (useAllelicPON) {
+            logger.info("Using allelic-bias panel of normals: " + allelicPONFile.getAbsolutePath());
+            modeller = new ACNVModeller(segmentedModel, allelicPON,
+                    numSamplesCopyRatio, numBurnInCopyRatio, numSamplesAlleleFraction, numBurnInAlleleFraction, ctx);
+        } else {
+            modeller = new ACNVModeller(segmentedModel,
+                    numSamplesCopyRatio, numBurnInCopyRatio, numSamplesAlleleFraction, numBurnInAlleleFraction, ctx);
+        }
+
         final File initialModeledSegmentsFile = new File(outputPrefix + "-" + INITIAL_SEG_FILE_TAG + ".seg");
         modeller.writeACNVModeledSegmentFile(initialModeledSegmentsFile);
 

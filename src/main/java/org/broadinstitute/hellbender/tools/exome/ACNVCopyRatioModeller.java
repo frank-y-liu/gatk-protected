@@ -215,14 +215,6 @@ public final class ACNVCopyRatioModeller {
     }
 
     /**
-     * Returns the {@link SegmentedModel} held internally.
-     * @return the {@link SegmentedModel} held internally
-     */
-    public SegmentedModel getSegmentedModel() {
-        return segmentedModel;
-    }
-
-    /**
      * Returns an unmodifiable view of the list of samples of the variance posterior.
      * @return  unmodifiable view of the list of samples of the variance posterior
      */

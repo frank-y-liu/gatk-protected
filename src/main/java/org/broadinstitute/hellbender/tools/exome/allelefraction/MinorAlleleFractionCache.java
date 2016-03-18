@@ -51,9 +51,9 @@ public final class MinorAlleleFractionCache {
         // work in log space to avoid underflow
         final UnivariateObjectiveFunction objective = new UnivariateObjectiveFunction(f -> {
             final double logf = Math.log(f);
-            final double logOneMinusf = Math.log(1.-f);
+            final double logOneMinusf = Math.log(1. - f);
             final double logBias = Math.log(bias);
-            final double logAltMinorDenominatorTerm = Math.log(f + (1.-f)*bias);
+            final double logAltMinorDenominatorTerm = Math.log(f + (1. - f)*bias);
             final double logRefMinorDenominatorTerm = Math.log(1. - f + f*bias);
             final double altMinorLogLikelihood =
                     a * logf + r * (logOneMinusf + logBias) - (a + r) * logAltMinorDenominatorTerm;

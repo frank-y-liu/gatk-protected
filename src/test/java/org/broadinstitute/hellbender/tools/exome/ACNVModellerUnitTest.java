@@ -26,11 +26,11 @@ public final class ACNVModellerUnitTest extends BaseTest {
     private static final File COVERAGES_FILE = new File(TEST_SUB_DIR
             + "coverages-for-similar-segment-merging.tsv");
     private static final File SNP_COUNTS_FILE = new File(TEST_SUB_DIR
-            + "snps-for-similar-segment-merging.tsv");
+            + "snps-for-acnv-modeller.tsv");
     private static final File SEGMENT_FILE =
-            new File(TEST_SUB_DIR + "segments-for-similar-segment-merging.seg");
+            new File(TEST_SUB_DIR + "segments-for-acnv-modeller.seg");
     private static final File SEGMENTS_TRUTH_FILE = new File(TEST_SUB_DIR
-            + "segments-truth-for-similar-segment-merging.seg");
+            + "segments-truth-for-acnv-modeller.seg");
 
     private static final int NUM_SAMPLES = 100;
     private static final int NUM_BURN_IN = 50;

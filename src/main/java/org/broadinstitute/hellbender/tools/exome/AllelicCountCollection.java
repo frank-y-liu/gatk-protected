@@ -26,7 +26,7 @@ public class AllelicCountCollection {
     private final List<AllelicCount> counts;
 
     public AllelicCountCollection() {
-        this.counts = new ArrayList<>();
+        counts = new ArrayList<>();
     }
 
     /**
@@ -52,7 +52,7 @@ public class AllelicCountCollection {
                         return new AllelicCount(interval, refReadCount, altReadCount);
                     };
                 })) {
-            this.counts = reader.stream().collect(Collectors.toList());
+            counts = reader.stream().collect(Collectors.toList());
         } catch (final IOException | UncheckedIOException e) {
             throw new UserException.CouldNotReadInputFile(inputFile, e);
         }

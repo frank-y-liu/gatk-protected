@@ -151,8 +151,8 @@ public final class AlleleFractionInitializer {
 
     private double estimateMinorFraction(final int segment, final AlleleFractionData data) {
         final UnivariateObjectiveFunction objective = new UnivariateObjectiveFunction(minorFraction -> {
-            final AlleleFractionState proposal = AlleleFractionModeller.makeSingleSegmentState(state.meanBias(),
-                    state.biasVariance(), state.outlierProbability(), minorFraction);
+            final AlleleFractionState proposal =
+                    new AlleleFractionState(state.meanBias(), state.biasVariance(), state.outlierProbability(), minorFraction); //single-segment state
             return AlleleFractionModeller.segmentLogLikelihood(proposal, 0, data.countsInSegment(segment));
         });
         final SearchInterval searchInterval = new SearchInterval(0.0, MAX_MINOR_ALLELE_FRACTION, state.minorFractionInSegment(segment));
