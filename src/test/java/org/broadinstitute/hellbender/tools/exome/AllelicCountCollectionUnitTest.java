@@ -35,7 +35,7 @@ public class AllelicCountCollectionUnitTest extends BaseTest {
 
     @Test
     public void testReadAndWrite() throws Exception {
-        final File tempFile = createTempFile("test", "tsv");
+        final File tempFile = createTempFile("allelic-count-collection-test", "tsv");
         final AllelicCountCollection snps = new AllelicCountCollection(SNPS_FILE);
         snps.write(tempFile);
 
