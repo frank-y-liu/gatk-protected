@@ -78,7 +78,7 @@ public final class AlleleFractionInitializer {
             previousIterationLogLikelihood = nextIterationLogLikelihood;
             state = new AlleleFractionState(estimateMeanBias(data), estimateBiasVariance(data),
                     estimateOutlierProbability(data), estimateMinorFractions(data));
-            nextIterationLogLikelihood = AlleleFractionModeller.logLikelihood(state, data);
+            nextIterationLogLikelihood = AlleleFractionLikelihoods.logLikelihood(state, data);
             logger.info(String.format("Iteration %d, model log likelihood = %.3f.", iteration, nextIterationLogLikelihood));
             iteration++;
         } while (iteration < MAX_ITERATIONS &&
@@ -130,21 +130,21 @@ public final class AlleleFractionInitializer {
 
     private double estimateOutlierProbability(final AlleleFractionData data) {
         final UnivariateObjectiveFunction objective = new UnivariateObjectiveFunction(outlierProbability ->
-                AlleleFractionModeller.logLikelihood(state.shallowCopyWithProposedOutlierProbability(outlierProbability), data));
+                AlleleFractionLikelihoods.logLikelihood(state.shallowCopyWithProposedOutlierProbability(outlierProbability), data));
         final SearchInterval searchInterval = new SearchInterval(0.0, MAX_REASONABLE_OUTLIER_PROBABILITY, state.outlierProbability());
         return OPTIMIZER.optimize(objective, GoalType.MAXIMIZE, searchInterval, BRENT_MAX_EVAL).getPoint();
     }
 
     private double estimateMeanBias(final AlleleFractionData data) {
         final UnivariateObjectiveFunction objective = new UnivariateObjectiveFunction(meanBias ->
-                AlleleFractionModeller.logLikelihood(state.shallowCopyWithProposedMeanBias(meanBias), data));
+                AlleleFractionLikelihoods.logLikelihood(state.shallowCopyWithProposedMeanBias(meanBias), data));
         final SearchInterval searchInterval = new SearchInterval(0.0, MAX_REASONABLE_MEAN_BIAS, state.meanBias());
         return OPTIMIZER.optimize(objective, GoalType.MAXIMIZE, searchInterval, BRENT_MAX_EVAL).getPoint();
     }
 
     private double estimateBiasVariance(final AlleleFractionData data) {
         final UnivariateObjectiveFunction objective = new UnivariateObjectiveFunction(biasVariance ->
-                AlleleFractionModeller.logLikelihood(state.shallowCopyWithProposedBiasVariance(biasVariance), data));
+                AlleleFractionLikelihoods.logLikelihood(state.shallowCopyWithProposedBiasVariance(biasVariance), data));
         final SearchInterval searchInterval = new SearchInterval(0.0, MAX_REASONABLE_BIAS_VARIANCE, state.biasVariance());
         return OPTIMIZER.optimize(objective, GoalType.MAXIMIZE, searchInterval, BRENT_MAX_EVAL).getPoint();
     }
@@ -153,7 +153,7 @@ public final class AlleleFractionInitializer {
         final UnivariateObjectiveFunction objective = new UnivariateObjectiveFunction(minorFraction -> {
             final AlleleFractionState proposal =
                     new AlleleFractionState(state.meanBias(), state.biasVariance(), state.outlierProbability(), minorFraction); //single-segment state
-            return AlleleFractionModeller.segmentLogLikelihood(proposal, 0, data.countsInSegment(segment));
+            return AlleleFractionLikelihoods.segmentLogLikelihood(proposal, 0, data.countsInSegment(segment));
         });
         final SearchInterval searchInterval = new SearchInterval(0.0, MAX_MINOR_ALLELE_FRACTION, state.minorFractionInSegment(segment));
         return OPTIMIZER.optimize(objective, GoalType.MAXIMIZE, searchInterval, BRENT_MAX_EVAL).getPoint();

@@ -1,0 +1,97 @@
+package org.broadinstitute.hellbender.tools.exome.allelefraction;
+
+import org.apache.commons.math3.random.RandomGenerator;
+import org.broadinstitute.hellbender.utils.mcmc.AdaptiveMetropolisSampler;
+import org.broadinstitute.hellbender.utils.mcmc.Sampler;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * Sampler classes for the allele-fraction model.
+ *
+ * @author David Benjamin
+ */
+public final class AlleleFractionSamplers {
+    private AlleleFractionSamplers() {}
+
+    // sample mean bias
+    protected static final class MeanBiasSampler implements Sampler<Double, AlleleFractionState, AlleleFractionData> {
+        private final AdaptiveMetropolisSampler sampler;
+
+        public MeanBiasSampler(final double initialMeanBias, final double initialStepSize) {
+            sampler = new AdaptiveMetropolisSampler(initialMeanBias, initialStepSize, 0, Double.POSITIVE_INFINITY);
+        }
+
+        public Double sample(final RandomGenerator rng, final AlleleFractionState state, final AlleleFractionData data) {
+            return sampler.sample(x -> AlleleFractionLikelihoods.logLikelihood(state.shallowCopyWithProposedMeanBias(x), data));
+        }
+    }
+
+    // sample bias variance
+    protected static final class BiasVarianceSampler implements Sampler<Double, AlleleFractionState, AlleleFractionData> {
+        private final AdaptiveMetropolisSampler sampler;
+
+        public BiasVarianceSampler(final double initialBiasVariance, final double initialStepSize) {
+            sampler = new AdaptiveMetropolisSampler(initialBiasVariance, initialStepSize, 0, Double.POSITIVE_INFINITY);
+        }
+
+        public Double sample(final RandomGenerator rng, final AlleleFractionState state, final AlleleFractionData data) {
+            return sampler.sample(x -> AlleleFractionLikelihoods.logLikelihood(state.shallowCopyWithProposedBiasVariance(x), data));
+        }
+    }
+
+    // sample outlier probability
+    protected static final class OutlierProbabilitySampler implements Sampler<Double, AlleleFractionState, AlleleFractionData> {
+        private final AdaptiveMetropolisSampler sampler;
+
+        public OutlierProbabilitySampler(final double initialOutlierProbability, final double initialStepSize) {
+            sampler = new AdaptiveMetropolisSampler(initialOutlierProbability, initialStepSize, 0, Double.POSITIVE_INFINITY);
+        }
+
+        public Double sample(final RandomGenerator rng, final AlleleFractionState state, final AlleleFractionData data) {
+            return sampler.sample(x -> AlleleFractionLikelihoods.logLikelihood(state.shallowCopyWithProposedOutlierProbability(x), data));
+        }
+    }
+
+    // sample minor fraction of a single segment
+    private static final class PerSegmentMinorFractionSampler implements Sampler<Double, AlleleFractionState, AlleleFractionData> {
+        private static final double MAX_MINOR_FRACTION = 0.5;   //by definition!
+        private final AdaptiveMetropolisSampler sampler;
+
+        private final int segmentIndex;
+
+        public PerSegmentMinorFractionSampler(final int segmentIndex, final double initialMinorFraction, final double initialStepSize) {
+            sampler = new AdaptiveMetropolisSampler(initialMinorFraction, initialStepSize, 0, MAX_MINOR_FRACTION);
+            this.segmentIndex = segmentIndex;
+        }
+
+        public Double sample(final RandomGenerator rng, final AlleleFractionState state, final AlleleFractionData data) {
+            if (data.numHetsInSegment(segmentIndex) == 0) {
+                return Double.NaN;
+            }
+            return sampler.sample(AlleleFractionLikelihoods.logConditionalOnMinorFraction(state, data, segmentIndex));
+        }
+    }
+
+    // sample minor fractions of all segments
+    protected static final class MinorFractionsSampler implements Sampler<AlleleFractionState.MinorFractions, AlleleFractionState, AlleleFractionData> {
+        private final List<PerSegmentMinorFractionSampler> perSegmentSamplers = new ArrayList<>();
+        private final int numSegments;
+
+        public MinorFractionsSampler(final AlleleFractionState.MinorFractions initialMinorFractions,
+                                     final List<Double> initialStepSizes) {
+            this.numSegments = initialMinorFractions.size();
+            for (int segment = 0; segment < numSegments; segment++) {
+                perSegmentSamplers.add(new PerSegmentMinorFractionSampler(segment, initialMinorFractions.get(segment),
+                        initialStepSizes.get(segment)));
+            }
+        }
+
+        public AlleleFractionState.MinorFractions sample(final RandomGenerator rng, final AlleleFractionState state, final AlleleFractionData data) {
+            return new AlleleFractionState.MinorFractions(perSegmentSamplers.stream()
+                    .map(sampler -> sampler.sample(rng, state, data)).collect(Collectors.toList()));
+        }
+    }
+}
