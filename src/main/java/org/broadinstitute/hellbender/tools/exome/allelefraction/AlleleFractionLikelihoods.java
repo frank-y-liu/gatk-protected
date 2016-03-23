@@ -63,18 +63,52 @@ public final class AlleleFractionLikelihoods {
             return log(pi) + log10ToLog(log10Factorial(a) + log10Factorial(r) - log10Factorial(a + r + 1));
         } else {
             final double f = indicator == AlleleFractionIndicator.ALT_MINOR ? minorFraction : 1 - minorFraction;
-            final int n = a + r;
-            final double w = (1 - f) * (a - alpha + 1) + beta * f;
-            final double lambda0 = (sqrt(w * w + 4 * beta * f * (1 - f) * (r + alpha - 1)) - w) / (2 * beta * (1 - f));
-            final double y = (1 - f)/(f + (1 - f) * lambda0);
-            final double kappa = n * y * y - (r + alpha - 1) / (lambda0 * lambda0);
-            final double rho = 1 - kappa * lambda0 * lambda0;
-            final double tau = -kappa * lambda0;
-            final double logc = alpha*log(beta) - Gamma.logGamma(alpha) + a * log(f) + r * log(1 - f)
-                    + (r + alpha - rho) * log(lambda0) + (tau - beta) * lambda0 - n * log(f + (1 - f) * lambda0);
-
-            return log((1 - pi) / 2) + logc + Gamma.logGamma(rho) - rho * log(tau);
+            return log((1 - pi) / 2) + logPhi(alpha, beta, f, a, r);
         }
+    }
+
+    public static double hetLogLikelihood(final AlleleFractionState state, final int segment, final AllelicCount count, final AlleleFractionIndicator indicator,
+                                          final AllelicPanelOfNormals allelicPON) {
+        final double mu = state.meanBias();
+        final double beta = state.meanBias() / state.biasVariance();
+        final double alpha = mu * beta;
+        final double pi = state.outlierProbability();
+        final double minorFraction = state.minorFractionInSegment(segment);
+        final int a = count.getAltReadCount();
+        final int r = count.getRefReadCount();
+
+        if (indicator == AlleleFractionIndicator.OUTLIER) {
+            return log(pi) + log10ToLog(log10Factorial(a) + log10Factorial(r) - log10Factorial(a + r + 1));
+        } else {
+            final double f = indicator == AlleleFractionIndicator.ALT_MINOR ? minorFraction : 1 - minorFraction;
+            return log((1 - pi) / 2) + logPhi(alpha, beta, f, a, r, allelicPON);
+        }
+    }
+
+    public static double logPhi(final double alpha, final double beta, final double f, final int a, final int r) {
+        final int n = a + r;
+        final double w = (1 - f) * (a - alpha + 1) + beta * f;
+        final double lambda0 = (sqrt(w * w + 4 * beta * f * (1 - f) * (r + alpha - 1)) - w) / (2 * beta * (1 - f));
+        final double y = (1 - f)/(f + (1 - f) * lambda0);
+        final double kappa = n * y * y - (r + alpha - 1) / (lambda0 * lambda0);
+        final double rho = 1 - kappa * lambda0 * lambda0;
+        final double tau = -kappa * lambda0;
+        final double logc = alpha*log(beta) - Gamma.logGamma(alpha) + a * log(f) + r * log(1 - f)
+                + (r + alpha - rho) * log(lambda0) + (tau - beta) * lambda0 - n * log(f + (1 - f) * lambda0);
+        return logc + Gamma.logGamma(rho) - rho * log(tau);
+    }
+
+    public static double logPhi(final double alpha, final double beta, final double f, final int a, final int r, final AllelicPanelOfNormals allelicPON) {
+        final int n = a + r;
+        final double w = (1 - f) * (a - alpha + 1) + beta * f;
+        final double lambda0 = (sqrt(w * w + 4 * beta * f * (1 - f) * (r + alpha - 1)) - w) / (2 * beta * (1 - f));
+        final double y = (1 - f)/(f + (1 - f) * lambda0);
+        final double kappa = n * y * y - (r + alpha - 1) / (lambda0 * lambda0);
+        final double rho = 1 - kappa * lambda0 * lambda0;
+        final double tau = -kappa * lambda0;
+        final double logc = alpha*log(beta) - Gamma.logGamma(alpha) + a * log(f) + r * log(1 - f)
+                + (r + alpha - rho) * log(lambda0) + (tau - beta) * lambda0 - n * log(f + (1 - f) * lambda0);
+        return logc + Gamma.logGamma(rho) - rho * log(tau);
     }
 
     /**
@@ -92,6 +126,12 @@ public final class AlleleFractionLikelihoods {
                 hetLogLikelihood(state, segment, count, AlleleFractionIndicator.OUTLIER));
     }
 
+    public static double collapsedHetLogLikelihood(final AlleleFractionState state, final int segment, final AllelicCount count, final AllelicPanelOfNormals allelicPON) {
+        return logSumLog(hetLogLikelihood(state, segment, count, AlleleFractionIndicator.ALT_MINOR, allelicPON),
+                hetLogLikelihood(state, segment, count, AlleleFractionIndicator.REF_MINOR, allelicPON),
+                hetLogLikelihood(state, segment, count, AlleleFractionIndicator.OUTLIER, allelicPON));
+    }
+
     /**
      * the log-likelihood of all the hets in a segment
      *
@@ -104,6 +144,10 @@ public final class AlleleFractionLikelihoods {
         return counts.stream().mapToDouble(c -> collapsedHetLogLikelihood(state, segment, c)).sum();
     }
 
+    public static double segmentLogLikelihood(final AlleleFractionState state, final int segment, final Collection<AllelicCount> counts, final AllelicPanelOfNormals allelicPON) {
+        return counts.stream().mapToDouble(c -> collapsedHetLogLikelihood(state, segment, c, allelicPON)).sum();
+    }
+
     /**
      * the total log likelihood of all segments
      * @param state current state
@@ -114,11 +158,23 @@ public final class AlleleFractionLikelihoods {
         return IntStream.range(0, data.numSegments()).mapToDouble(s -> segmentLogLikelihood(state, s, data.countsInSegment(s))).sum();
     }
 
+    public static double logLikelihood(final AlleleFractionState state, final AlleleFractionData data, final AllelicPanelOfNormals allelicPON) {
+        return IntStream.range(0, data.numSegments()).mapToDouble(s -> segmentLogLikelihood(state, s, data.countsInSegment(s), allelicPON)).sum();
+    }
+
     protected static Function<Double, Double> logConditionalOnMinorFraction(final AlleleFractionState state,
                                                                           final AlleleFractionData data, final int segment) {
         return minorFraction -> {
             final AlleleFractionState proposal = new AlleleFractionState(state.meanBias(), state.biasVariance(), state.outlierProbability(), minorFraction);
             return AlleleFractionLikelihoods.segmentLogLikelihood(proposal, 0, data.countsInSegment(segment));
+        };
+    }
+
+    protected static Function<Double, Double> logConditionalOnMinorFraction(final AlleleFractionState state,
+                                                                            final AlleleFractionData data, final int segment, final AllelicPanelOfNormals allelicPON) {
+        return minorFraction -> {
+            final AlleleFractionState proposal = new AlleleFractionState(state.meanBias(), state.biasVariance(), state.outlierProbability(), minorFraction);
+            return AlleleFractionLikelihoods.segmentLogLikelihood(proposal, 0, data.countsInSegment(segment), allelicPON);
         };
     }
 

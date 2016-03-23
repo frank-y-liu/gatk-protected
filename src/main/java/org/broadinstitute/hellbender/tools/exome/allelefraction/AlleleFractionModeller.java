@@ -42,6 +42,7 @@ import java.util.stream.IntStream;
  */
 public final class AlleleFractionModeller {
     private final SegmentedModel segmentedModel;
+    private AllelicPanelOfNormals allelicPON;
     private final ParameterizedModel<AlleleFractionState, AlleleFractionData> model;
     private final List<Double> meanBiasSamples = new ArrayList<>();
     private final List<Double> biasVarianceSamples = new ArrayList<>();
@@ -50,7 +51,12 @@ public final class AlleleFractionModeller {
     private final int numSegments;
 
     public AlleleFractionModeller(final SegmentedModel segmentedModel) {
+        this(segmentedModel, new AllelicPanelOfNormals());
+    }
+
+    public AlleleFractionModeller(final SegmentedModel segmentedModel, final AllelicPanelOfNormals allelicPON) {
         this.segmentedModel = segmentedModel;
+        this.allelicPON = allelicPON;
         final AlleleFractionData data = new AlleleFractionData(segmentedModel);
         numSegments = data.numSegments();
         final AlleleFractionState initialState = new AlleleFractionInitializer(data).getInitializedState();

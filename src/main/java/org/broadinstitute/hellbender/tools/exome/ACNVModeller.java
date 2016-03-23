@@ -36,8 +36,6 @@ public final class ACNVModeller {
     private final int numBurnInAlleleFraction;
     private final JavaSparkContext ctx;
 
-    private final boolean usePON;
-
     public List<ACNVModeledSegment> getACNVModeledSegments() {
         return Collections.unmodifiableList(segments);
     }
@@ -58,7 +56,7 @@ public final class ACNVModeller {
                         final int numSamplesCopyRatio, final int numBurnInCopyRatio,
                         final int numSamplesAlleleFraction, final int numBurnInAlleleFraction,
                         final JavaSparkContext ctx) {
-        this(segmentedModel, null, numSamplesCopyRatio, numBurnInCopyRatio, numSamplesAlleleFraction, numBurnInAlleleFraction, ctx, false);
+        this(segmentedModel, AllelicPanelOfNormals.EMPTY_PON, numSamplesCopyRatio, numBurnInCopyRatio, numSamplesAlleleFraction, numBurnInAlleleFraction, ctx);
     }
 
     /**
@@ -78,21 +76,13 @@ public final class ACNVModeller {
                         final int numSamplesCopyRatio, final int numBurnInCopyRatio,
                         final int numSamplesAlleleFraction, final int numBurnInAlleleFraction,
                         final JavaSparkContext ctx) {
-        this(segmentedModel, allelicPON, numSamplesCopyRatio, numBurnInCopyRatio, numSamplesAlleleFraction, numBurnInAlleleFraction, ctx, true);
-    }
-
-    private ACNVModeller(final SegmentedModel segmentedModel, final AllelicPanelOfNormals allelicPON,
-                         final int numSamplesCopyRatio, final int numBurnInCopyRatio,
-                         final int numSamplesAlleleFraction, final int numBurnInAlleleFraction,
-                         final JavaSparkContext ctx, final boolean usePON) {
         this.segmentedModel = segmentedModel;
-        this.allelicPON = allelicPON;   //null if usePON = false
+        this.allelicPON = allelicPON;
         this.numSamplesCopyRatio = numSamplesCopyRatio;
         this.numBurnInCopyRatio = numBurnInCopyRatio;
         this.numSamplesAlleleFraction = numSamplesAlleleFraction;
         this.numBurnInAlleleFraction = numBurnInAlleleFraction;
         this.ctx = ctx;
-        this.usePON = usePON;
         logger.info("Fitting initial model...");
         fitModel();
     }
@@ -125,12 +115,7 @@ public final class ACNVModeller {
         final ACNVCopyRatioModeller copyRatioModeller = new ACNVCopyRatioModeller(segmentedModel);
         copyRatioModeller.fitMCMC(numSamplesCopyRatio, numBurnInCopyRatio);
         logger.info("Fitting allele-fraction model...");
-        final AlleleFractionModeller alleleFractionModeller;
-        if (usePON) {
-            alleleFractionModeller = new AlleleFractionModeller(segmentedModel); //, allelicPON);
-        } else {
-            alleleFractionModeller = new AlleleFractionModeller(segmentedModel);
-        }
+        final AlleleFractionModeller alleleFractionModeller = new AlleleFractionModeller(segmentedModel, allelicPON);
         alleleFractionModeller.fitMCMC(numSamplesAlleleFraction, numBurnInAlleleFraction);
 
         //update list of ACNVModeledSegment with new PosteriorSummaries

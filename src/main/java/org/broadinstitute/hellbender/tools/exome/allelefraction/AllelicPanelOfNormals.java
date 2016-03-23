@@ -5,6 +5,7 @@ import org.broadinstitute.hellbender.tools.exome.AllelicCount;
 import org.broadinstitute.hellbender.tools.exome.AllelicCountCollection;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
+import org.broadinstitute.hellbender.utils.param.ParamUtils;
 
 import java.io.File;
 import java.util.HashMap;
@@ -18,11 +19,25 @@ import static java.lang.Math.sqrt;
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
 public final class AllelicPanelOfNormals {
+    public static final AllelicPanelOfNormals EMPTY_PON = new AllelicPanelOfNormals();
+
     private final Map<SimpleInterval, HyperparameterValues> siteToHyperparameterPairMap = new HashMap<>();
 
-    private final HyperparameterValues mleHyperparameterValues;
+    private HyperparameterValues mleHyperparameterValues;
 
-    public AllelicPanelOfNormals(final File inputFile) {
+    public AllelicPanelOfNormals() {}
+
+//    public AllelicPanelOfNormals(final AlleleFractionState initialState) {
+//        Utils.nonNull(initialState);
+//
+//        final double meanBias = initialState.meanBias();
+//        final double biasVariance = initialState.biasVariance();
+//        final double beta = meanBias / biasVariance;
+//        final double alpha = meanBias * beta;
+//        mleHyperparameterValues = new HyperparameterValues(alpha, beta);
+//    }
+
+    public void load(final File inputFile) {
         Utils.nonNull(inputFile);
         Utils.regularReadableUserFile(inputFile);
 

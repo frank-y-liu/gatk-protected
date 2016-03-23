@@ -221,14 +221,9 @@ public class AllelicCNV extends SparkCommandLineProgram {
         final Genome genome = new Genome(targetCoveragesFile, snpCountsFile, sampleName);
 
         //load allelic-bias panel of normals if provided
-        final boolean useAllelicPON;
-        final AllelicPanelOfNormals allelicPON;
+        final AllelicPanelOfNormals allelicPON = AllelicPanelOfNormals.EMPTY_PON;
         if (allelicPONFile != null) {
-            useAllelicPON = true;
-            allelicPON = new AllelicPanelOfNormals(allelicPONFile);
-        } else {
-            useAllelicPON = false;
-            allelicPON = null;
+            allelicPON.load(allelicPONFile);
         }
 
         //load target-coverage segments from input file
@@ -259,15 +254,8 @@ public class AllelicCNV extends SparkCommandLineProgram {
         segmentedModel.writeSegmentFileWithNumTargetsAndNumSNPs(segmentedModelFile);
 
         //initial MCMC model fitting performed by ACNVModeller constructor\
-        final ACNVModeller modeller;
-        if (useAllelicPON) {
-            logger.info("Using allelic-bias panel of normals: " + allelicPONFile.getAbsolutePath());
-            modeller = new ACNVModeller(segmentedModel, allelicPON,
-                    numSamplesCopyRatio, numBurnInCopyRatio, numSamplesAlleleFraction, numBurnInAlleleFraction, ctx);
-        } else {
-            modeller = new ACNVModeller(segmentedModel,
-                    numSamplesCopyRatio, numBurnInCopyRatio, numSamplesAlleleFraction, numBurnInAlleleFraction, ctx);
-        }
+        final ACNVModeller modeller = new ACNVModeller(segmentedModel, allelicPON,
+                numSamplesCopyRatio, numBurnInCopyRatio, numSamplesAlleleFraction, numBurnInAlleleFraction, ctx);
 
         final File initialModeledSegmentsFile = new File(outputPrefix + "-" + INITIAL_SEG_FILE_TAG + ".seg");
         modeller.writeACNVModeledSegmentFile(initialModeledSegmentsFile);
