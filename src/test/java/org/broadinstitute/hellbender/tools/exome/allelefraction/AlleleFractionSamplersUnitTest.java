@@ -43,21 +43,20 @@ public class AlleleFractionSamplersUnitTest {
         // averaging from 0 < f < 1/2 gives an average variance of 5/(24*N*d).  Assuming normality,
         // the absolute value of this sampling error (i.e. inherent to the simulated data and having nothing to do with
         // the MCMC or the model) has mean sqrt[5 / (12*pi*N*d)]
-        final double MINOR_FRACTION_SAMPLING_ERROR = Math.sqrt(5.0 / (12.0 * 3.14 * averageHetsPerSegment * averageDepth));
-        final double MINOR_FRACTION_TOLERANCE = MINOR_FRACTION_SAMPLING_ERROR;
+        final double MINOR_FRACTION_TOLERANCE = Math.sqrt(5.0 / (12.0 * 3.14 * averageHetsPerSegment * averageDepth));
 
         final AlleleFractionSimulatedData SIMULATED_DATA = new AlleleFractionSimulatedData(averageHetsPerSegment, numSegments, averageDepth, meanBias, biasVariance, outlierProbability);
         final AlleleFractionState INITIAL_STATE = SIMULATED_DATA.getTrueState();
         final AlleleFractionData DATA = new AlleleFractionData(SIMULATED_DATA.getSegmentedModel());
 
         final AlleleFractionSamplers.MeanBiasSampler meanBiasSampler =
-                new AlleleFractionSamplers.MeanBiasSampler(INITIAL_STATE.meanBias(), 0.01);
+                new AlleleFractionSamplers.MeanBiasSampler(INITIAL_STATE, 0.01);
         final AlleleFractionSamplers.BiasVarianceSampler biasVarianceSampler =
-                new AlleleFractionSamplers.BiasVarianceSampler(INITIAL_STATE.biasVariance(), 0.01);
+                new AlleleFractionSamplers.BiasVarianceSampler(INITIAL_STATE, 0.01);
         final AlleleFractionSamplers.OutlierProbabilitySampler outlierProbabilitySampler =
-                new AlleleFractionSamplers.OutlierProbabilitySampler(INITIAL_STATE.outlierProbability(), 0.01);
+                new AlleleFractionSamplers.OutlierProbabilitySampler(INITIAL_STATE, 0.01);
         final AlleleFractionSamplers.MinorFractionsSampler minorFractionsSampler =
-                new AlleleFractionSamplers.MinorFractionsSampler(INITIAL_STATE.minorFractions(), Collections.nCopies(numSegments, 0.01));
+                new AlleleFractionSamplers.MinorFractionsSampler(INITIAL_STATE, Collections.nCopies(numSegments, 0.01));
 
         final AlleleFractionState state = INITIAL_STATE.copy(AlleleFractionState.class);
         final List<Double> meanBiasSamples = new ArrayList<>();
@@ -72,6 +71,7 @@ public class AlleleFractionSamplersUnitTest {
         }
 
         final double estimatedMeanBias = meanBiasSamples.stream().mapToDouble(x -> x).average().getAsDouble();
+        System.out.println(meanBiasSamples);
         Assert.assertEquals(estimatedMeanBias, meanBias, meanBiasTolerance);
 
         final double estimatedBiasVariance = biasVarianceSamples.stream().mapToDouble(x -> x).average().getAsDouble();

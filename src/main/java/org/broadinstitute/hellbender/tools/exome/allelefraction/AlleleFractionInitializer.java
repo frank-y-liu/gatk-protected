@@ -153,7 +153,7 @@ public final class AlleleFractionInitializer {
         final UnivariateObjectiveFunction objective = new UnivariateObjectiveFunction(minorFraction -> {
             final AlleleFractionState proposal =
                     new AlleleFractionState(state.meanBias(), state.biasVariance(), state.outlierProbability(), minorFraction); //single-segment state
-            return AlleleFractionLikelihoods.segmentLogLikelihood(proposal, 0, data.countsInSegment(segment));
+            return AlleleFractionLikelihoods.segmentLogLikelihood(proposal, 0, data.countsInSegment(segment), data.getPON());
         });
         final SearchInterval searchInterval = new SearchInterval(0.0, MAX_MINOR_ALLELE_FRACTION, state.minorFractionInSegment(segment));
         return OPTIMIZER.optimize(objective, GoalType.MAXIMIZE, searchInterval, BRENT_MAX_EVAL).getPoint();

@@ -24,7 +24,7 @@ public final class ACNVModellerUnitTest extends BaseTest {
 
     private static final String SAMPLE_NAME = "test";
     private static final File COVERAGES_FILE = new File(TEST_SUB_DIR
-            + "coverages-for-similar-segment-merging.tsv");
+            + "coverages-for-acnv-modeller.tsv");
     private static final File SNP_COUNTS_FILE = new File(TEST_SUB_DIR
             + "snps-for-acnv-modeller.tsv");
     private static final File SEGMENT_FILE =

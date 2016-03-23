@@ -27,17 +27,17 @@ public final class AllelicPanelOfNormals {
 
     public AllelicPanelOfNormals() {}
 
-//    public AllelicPanelOfNormals(final AlleleFractionState initialState) {
-//        Utils.nonNull(initialState);
-//
-//        final double meanBias = initialState.meanBias();
-//        final double biasVariance = initialState.biasVariance();
-//        final double beta = meanBias / biasVariance;
-//        final double alpha = meanBias * beta;
-//        mleHyperparameterValues = new HyperparameterValues(alpha, beta);
-//    }
+    public AllelicPanelOfNormals(final AlleleFractionState state) {
+        Utils.nonNull(state);
 
-    public void load(final File inputFile) {
+        final double meanBias = state.meanBias();
+        final double biasVariance = state.biasVariance();
+        final double beta = meanBias / biasVariance;
+        final double alpha = meanBias * beta;
+        mleHyperparameterValues = new HyperparameterValues(alpha, beta);
+    }
+
+    public AllelicPanelOfNormals(final File inputFile) {
         Utils.nonNull(inputFile);
         Utils.regularReadableUserFile(inputFile);
 
