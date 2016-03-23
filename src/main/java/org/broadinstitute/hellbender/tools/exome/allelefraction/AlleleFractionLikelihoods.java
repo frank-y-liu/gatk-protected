@@ -133,7 +133,7 @@ public final class AlleleFractionLikelihoods {
 
     protected static Function<Double, Double> logConditionalOnMinorFraction(final AlleleFractionState state,
                                                                             final AlleleFractionData data, final int segment) {
-        return logConditionalOnMinorFraction(state, data, segment, new AllelicPanelOfNormals(state));
+        return logConditionalOnMinorFraction(state, data, segment, AllelicPanelOfNormals.EMPTY_PON);
     }
 
     protected static Function<Double, Double> logConditionalOnMinorFraction(final AlleleFractionState state,

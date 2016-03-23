@@ -40,25 +40,25 @@ import java.util.stream.IntStream;
 public final class AlleleFractionInitializer {
     @VisibleForTesting
     protected static final double INITIAL_OUTLIER_PROBABILITY = 0.01;
-    private static final double INITIAL_MEAN_BIAS = 1.0;
-    private static final double INITIAL_BIAS_VARIANCE = 0.1;   // this is an overestimate, but starting small makes it slow for
+    protected static final double INITIAL_MEAN_BIAS = 1.0;
+    protected static final double INITIAL_BIAS_VARIANCE = 0.1;   // this is an overestimate, but starting small makes it slow for
     // mean bias to escape a bad initial guess
-    private static final double LOG_LIKELIHOOD_CONVERGENCE_THRESHOLD = 0.5;
-    private static final int MAX_ITERATIONS = 50;
+    protected static final double LOG_LIKELIHOOD_CONVERGENCE_THRESHOLD = 0.5;
+    protected static final int MAX_ITERATIONS = 50;
 
     //define maxima of search intervals for maximum likelihood -- parameter values above these would be ridiculous
     private static final double MAX_REASONABLE_OUTLIER_PROBABILITY = 0.1;
-    private static final double MAX_REASONABLE_MEAN_BIAS = 5.0;
-    private static final double MAX_REASONABLE_BIAS_VARIANCE = 1.0;
+    protected static final double MAX_REASONABLE_MEAN_BIAS = 5.0;
+    protected static final double MAX_REASONABLE_BIAS_VARIANCE = 1.0;
 
     //the minor allele fraction of a segment must be less than one half by definition
     private static final double MAX_MINOR_ALLELE_FRACTION = 0.5;
 
     // constants for Brent optimization
-    private static final MaxEval BRENT_MAX_EVAL = new MaxEval(1000);
+    protected static final MaxEval BRENT_MAX_EVAL = new MaxEval(1000);
     private static final double RELATIVE_TOLERANCE = 0.001;
     private static final double ABSOLUTE_TOLERANCE = 0.001;
-    private static final BrentOptimizer OPTIMIZER = new BrentOptimizer(RELATIVE_TOLERANCE, ABSOLUTE_TOLERANCE);
+    protected static final BrentOptimizer OPTIMIZER = new BrentOptimizer(RELATIVE_TOLERANCE, ABSOLUTE_TOLERANCE);
 
     private AlleleFractionState state;
     private static final Logger logger = LogManager.getLogger(AlleleFractionInitializer.class);
@@ -72,7 +72,7 @@ public final class AlleleFractionInitializer {
         double previousIterationLogLikelihood;
         double nextIterationLogLikelihood = Double.NEGATIVE_INFINITY;
         int iteration = 1;
-        logger.info(String.format("Initializing allele fraction model.  Iterating until log likelihood converges to within %.3f.",
+        logger.info(String.format("Initializing allele-fraction model.  Iterating until log likelihood converges to within %.3f.",
                 LOG_LIKELIHOOD_CONVERGENCE_THRESHOLD));
         do {
             previousIterationLogLikelihood = nextIterationLogLikelihood;

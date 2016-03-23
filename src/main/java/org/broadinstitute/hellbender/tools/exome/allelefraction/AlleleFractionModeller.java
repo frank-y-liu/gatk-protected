@@ -50,39 +50,7 @@ public final class AlleleFractionModeller {
     private final int numSegments;
 
     public AlleleFractionModeller(final SegmentedModel segmentedModel) {
-        this.segmentedModel = segmentedModel;
-        final AlleleFractionData data = new AlleleFractionData(segmentedModel);
-        numSegments = data.numSegments();
-        final AlleleFractionState initialState = new AlleleFractionInitializer(data).getInitializedState();
-
-        // Initialization got us to the mode of the likelihood
-        // if we approximate conditionals as normal we can guess the width from the curvature at the mode
-
-        final double meanBiasInitialStepSize = estimateWidthAtMode(meanBias ->
-                AlleleFractionLikelihoods.logLikelihood(initialState.shallowCopyWithProposedMeanBias(meanBias), data), initialState.meanBias());
-        final double biasVarianceInitialStepSize = estimateWidthAtMode(biasVariance ->
-                AlleleFractionLikelihoods.logLikelihood(initialState.shallowCopyWithProposedBiasVariance(biasVariance), data), initialState.biasVariance());
-        final double outlierProbabilityInitialStepSize = estimateWidthAtMode(outlierProbability ->
-                AlleleFractionLikelihoods.logLikelihood(initialState.shallowCopyWithProposedMeanBias(outlierProbability), data), initialState.outlierProbability());
-        final List<Double> minorFractionsInitialStepSizes = IntStream.range(0, numSegments).mapToDouble(segment ->
-                estimateWidthAtMode(AlleleFractionLikelihoods.logConditionalOnMinorFraction(initialState, data, segment), initialState.minorFractionInSegment(segment)))
-                .boxed().collect(Collectors.toList());
-
-        final Sampler<Double, AlleleFractionState, AlleleFractionData> meanBiasSampler =
-                new AlleleFractionSamplers.MeanBiasSampler(initialState, meanBiasInitialStepSize);
-        final Sampler<Double, AlleleFractionState, AlleleFractionData> biasVarianceSampler =
-                new AlleleFractionSamplers.BiasVarianceSampler(initialState, biasVarianceInitialStepSize);
-        final Sampler<Double, AlleleFractionState, AlleleFractionData> outlierProbabilitySampler =
-                new AlleleFractionSamplers.OutlierProbabilitySampler(initialState, outlierProbabilityInitialStepSize);
-        final Sampler<AlleleFractionState.MinorFractions, AlleleFractionState, AlleleFractionData> minorFractionsSampler =
-                new AlleleFractionSamplers.MinorFractionsSampler(initialState, minorFractionsInitialStepSizes);
-
-        model = new ParameterizedModel.GibbsBuilder<>(initialState, data, AlleleFractionState.class)
-                .addParameterSampler(AlleleFractionState.MEAN_BIAS_NAME, meanBiasSampler, Double.class)
-                .addParameterSampler(AlleleFractionState.BIAS_VARIANCE_NAME, biasVarianceSampler, Double.class)
-                .addParameterSampler(AlleleFractionState.P_OUTLIER_NAME, outlierProbabilitySampler, Double.class)
-                .addParameterSampler(AlleleFractionState.MINOR_FRACTIONS_NAME, minorFractionsSampler, AlleleFractionState.MinorFractions.class)
-                .build();
+        this(segmentedModel, AllelicPanelOfNormals.EMPTY_PON);
     }
 
     public AlleleFractionModeller(final SegmentedModel segmentedModel, final AllelicPanelOfNormals allelicPON) {
