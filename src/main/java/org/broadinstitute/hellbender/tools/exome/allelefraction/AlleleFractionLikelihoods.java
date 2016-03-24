@@ -82,16 +82,32 @@ public final class AlleleFractionLikelihoods {
     }
 
     public static double logPhi(final double alpha, final double beta, final double f, final int a, final int r) {
+        final double lambda0 = lambda0(alpha, beta, f, a, r);
         final int n = a + r;
-        final double w = (1 - f) * (a - alpha + 1) + beta * f;
-        final double lambda0 = (sqrt(w * w + 4 * beta * f * (1 - f) * (r + alpha - 1)) - w) / (2 * beta * (1 - f));
-        final double y = (1 - f)/(f + (1 - f) * lambda0);
-        final double kappa = n * y * y - (r + alpha - 1) / (lambda0 * lambda0);
-        final double rho = 1 - kappa * lambda0 * lambda0;
-        final double tau = -kappa * lambda0;
+        final double kappa = kappa(alpha, f, r, n, lambda0);
+        final double rho = rho(lambda0, kappa);
+        final double tau = tau(lambda0, kappa);
         final double logc = alpha*log(beta) - Gamma.logGamma(alpha) + a * log(f) + r * log(1 - f)
                 + (r + alpha - rho) * log(lambda0) + (tau - beta) * lambda0 - n * log(f + (1 - f) * lambda0);
         return logc + Gamma.logGamma(rho) - rho * log(tau);
+    }
+
+    public static double lambda0(final double alpha, final double beta, final double f, final int a, final int r) {
+        final double w = (1 - f) * (a - alpha + 1) + beta * f;
+        return (sqrt(w * w + 4 * beta * f * (1 - f) * (r + alpha - 1)) - w) / (2 * beta * (1 - f));
+    }
+
+    public static double kappa(final double alpha, final double f, final int r, final int n, final double lambda0) {
+        final double y = (1 - f)/(f + (1 - f) * lambda0);
+        return n * y * y - (r + alpha - 1) / (lambda0 * lambda0);
+    }
+
+    public static double rho(final double lambda0, final double kappa) {
+        return 1 - kappa * lambda0 * lambda0;
+    }
+
+    public static double tau(final double lambda0, final double kappa) {
+        return -kappa * lambda0;
     }
 
     /**

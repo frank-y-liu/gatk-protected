@@ -66,12 +66,10 @@ public final class AllelicPanelOfNormals {
             final int n = a + r;
             final double alpha = mleHyperparameterValues.alpha;
             final double beta = mleHyperparameterValues.beta;
-            final double w = (1 - f) * (a - alpha + 1) + beta * f;
-            final double lambda0 = (sqrt(w * w + 4 * beta * f * (1 - f) * (r + alpha - 1)) - w) / (2 * beta * (1 - f));
-            final double y = (1 - f)/(f + (1 - f) * lambda0);
-            final double kappa = n * y * y - (r + alpha - 1) / (lambda0 * lambda0);
-            this.alpha = 1 - kappa * lambda0 * lambda0;
-            this.beta = -kappa * lambda0;
+            final double lambda0 = AlleleFractionLikelihoods.lambda0(alpha, beta, f, a, r);
+            final double kappa = AlleleFractionLikelihoods.kappa(alpha, f, r, n, lambda0);
+            this.alpha = AlleleFractionLikelihoods.rho(lambda0, kappa);
+            this.beta = AlleleFractionLikelihoods.tau(lambda0, kappa);
         }
     }
 
