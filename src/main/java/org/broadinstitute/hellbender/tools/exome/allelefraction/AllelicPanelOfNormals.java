@@ -30,6 +30,8 @@ public final class AllelicPanelOfNormals {
 
     private final Map<SimpleInterval, HyperparameterValues> siteToHyperparameterPairMap = new HashMap<>();
     private HyperparameterValues mleHyperparameterValues;
+    private double mleMeanBias;
+    private double mleBiasVariance;
 
     public AllelicPanelOfNormals() {}
 
@@ -39,6 +41,8 @@ public final class AllelicPanelOfNormals {
 
         final AllelicCountCollection counts = new AllelicCountCollection(inputFile);
         mleHyperparameterValues = calculateMLEHyperparameterValues(counts);
+        mleMeanBias = meanBias(mleHyperparameterValues.alpha, mleHyperparameterValues.beta);
+        mleBiasVariance = biasVariance(mleHyperparameterValues.alpha, mleHyperparameterValues.beta);
         initializeSiteToHyperparameterPairMap(counts);
     }
 
@@ -51,6 +55,9 @@ public final class AllelicPanelOfNormals {
         Utils.nonNull(site);
         return siteToHyperparameterPairMap.getOrDefault(site, mleHyperparameterValues).beta;
     }
+
+    public double getMLEMeanBias() { return mleMeanBias; }
+    public double getMLEBiasVariance() { return mleBiasVariance; }
 
     private class HyperparameterValues {
         private final double alpha;
@@ -142,5 +149,13 @@ public final class AllelicPanelOfNormals {
 
     private double beta(final double meanBias, final double biasVariance) {
         return meanBias / biasVariance;
+    }
+
+    private double meanBias(final double alpha, final double beta) {
+        return alpha / beta;
+    }
+
+    private double biasVariance(final double alpha, final double beta) {
+        return alpha / (beta * beta);
     }
 }

@@ -11,7 +11,8 @@ import java.util.stream.Collectors;
 /**
  * Sampler classes for the allele-fraction model.
  *
- * @author David Benjamin
+ * @author David Benjamin &lt;davidben@broadinstitute.org&gt;
+ * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
 public final class AlleleFractionSamplers {
     private AlleleFractionSamplers() {}
@@ -25,7 +26,11 @@ public final class AlleleFractionSamplers {
         }
 
         public Double sample(final RandomGenerator rng, final AlleleFractionState state, final AlleleFractionData data) {
-            return sampler.sample(x -> AlleleFractionLikelihoods.logLikelihood(state.shallowCopyWithProposedMeanBias(x), data));
+            final AllelicPanelOfNormals allelicPON = data.getPON();
+            if (allelicPON.equals(AllelicPanelOfNormals.EMPTY_PON)) {
+                return sampler.sample(x -> AlleleFractionLikelihoods.logLikelihood(state.shallowCopyWithProposedMeanBias(x), data));
+            }
+            return allelicPON.getMLEMeanBias();
         }
     }
 
@@ -38,7 +43,11 @@ public final class AlleleFractionSamplers {
         }
 
         public Double sample(final RandomGenerator rng, final AlleleFractionState state, final AlleleFractionData data) {
-            return sampler.sample(x -> AlleleFractionLikelihoods.logLikelihood(state.shallowCopyWithProposedBiasVariance(x), data));
+            final AllelicPanelOfNormals allelicPON = data.getPON();
+            if (allelicPON.equals(AllelicPanelOfNormals.EMPTY_PON)) {
+                return sampler.sample(x -> AlleleFractionLikelihoods.logLikelihood(state.shallowCopyWithProposedBiasVariance(x), data));
+            }
+            return allelicPON.getMLEBiasVariance();
         }
     }
 

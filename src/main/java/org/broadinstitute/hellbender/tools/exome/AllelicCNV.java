@@ -253,7 +253,7 @@ public class AllelicCNV extends SparkCommandLineProgram {
         final File segmentedModelFile = new File(outputPrefix + "-" + SMALL_MERGED_SEG_FILE_TAG + ".seg");
         segmentedModel.writeSegmentFileWithNumTargetsAndNumSNPs(segmentedModelFile);
 
-        //initial MCMC model fitting performed by ACNVModeller constructor\
+        //initial MCMC model fitting performed by ACNVModeller constructor
         final ACNVModeller modeller = new ACNVModeller(segmentedModel, allelicPON,
                 numSamplesCopyRatio, numBurnInCopyRatio, numSamplesAlleleFraction, numBurnInAlleleFraction, ctx);
 
