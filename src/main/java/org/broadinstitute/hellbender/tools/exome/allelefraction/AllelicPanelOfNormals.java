@@ -114,14 +114,14 @@ public final class AllelicPanelOfNormals {
         return new HyperparameterValues(alpha, beta);
     }
 
-    private double estimateMeanBias(final double meanBias, final double biasVariance, final AllelicCountCollection counts) {
+    private static double estimateMeanBias(final double meanBias, final double biasVariance, final AllelicCountCollection counts) {
         final UnivariateObjectiveFunction objective = new UnivariateObjectiveFunction(proposedMeanBias ->
                 AlleleFractionLikelihoods.logLikelihoodForAllelicPanelOfNormals(proposedMeanBias, biasVariance, counts));
         final SearchInterval searchInterval = new SearchInterval(0.0, AlleleFractionInitializer.MAX_REASONABLE_MEAN_BIAS, meanBias);
         return AlleleFractionInitializer.OPTIMIZER.optimize(objective, GoalType.MAXIMIZE, searchInterval, AlleleFractionInitializer.BRENT_MAX_EVAL).getPoint();
     }
 
-    private double estimateBiasVariance(final double meanBias, final double biasVariance, final AllelicCountCollection counts) {
+    private static double estimateBiasVariance(final double meanBias, final double biasVariance, final AllelicCountCollection counts) {
         final UnivariateObjectiveFunction objective = new UnivariateObjectiveFunction(proposedBiasVariance ->
                 AlleleFractionLikelihoods.logLikelihoodForAllelicPanelOfNormals(meanBias, proposedBiasVariance, counts));
         final SearchInterval searchInterval = new SearchInterval(0.0, AlleleFractionInitializer.MAX_REASONABLE_BIAS_VARIANCE, biasVariance);
@@ -152,15 +152,15 @@ public final class AllelicPanelOfNormals {
         return meanBias * meanBias / biasVariance;
     }
 
-    private double beta(final double meanBias, final double biasVariance) {
+    private static double beta(final double meanBias, final double biasVariance) {
         return meanBias / biasVariance;
     }
 
-    private double meanBias(final double alpha, final double beta) {
+    private static double meanBias(final double alpha, final double beta) {
         return alpha / beta;
     }
 
-    private double biasVariance(final double alpha, final double beta) {
+    private static double biasVariance(final double alpha, final double beta) {
         return alpha / (beta * beta);
     }
 }

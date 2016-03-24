@@ -4,7 +4,9 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.broadinstitute.hellbender.tools.exome.SegmentedModel;
 import org.broadinstitute.hellbender.utils.mcmc.*;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
