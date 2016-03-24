@@ -96,9 +96,11 @@ public final class AllelicPanelOfNormals {
         } while (iteration < AlleleFractionInitializer.MAX_ITERATIONS &&
                 nextIterationLogLikelihood - previousIterationLogLikelihood > AlleleFractionInitializer.LOG_LIKELIHOOD_CONVERGENCE_THRESHOLD);
 
-        logger.info("MLE hyperparameter values for allelic panel of normals found.");
         final double alpha = alpha(meanBias, biasVariance);
         final double beta = beta(meanBias, biasVariance);
+        logger.info("MLE hyperparameter values for allelic panel of normals found:");
+        logger.info("alpha = " + alpha);
+        logger.info("beta = " + beta);
         return new HyperparameterValues(alpha, beta);
     }
 

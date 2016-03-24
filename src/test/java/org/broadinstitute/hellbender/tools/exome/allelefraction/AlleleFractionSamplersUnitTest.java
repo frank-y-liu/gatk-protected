@@ -71,7 +71,6 @@ public class AlleleFractionSamplersUnitTest {
         }
 
         final double estimatedMeanBias = meanBiasSamples.stream().mapToDouble(x -> x).average().getAsDouble();
-        System.out.println(meanBiasSamples);
         Assert.assertEquals(estimatedMeanBias, meanBias, meanBiasTolerance);
 
         final double estimatedBiasVariance = biasVarianceSamples.stream().mapToDouble(x -> x).average().getAsDouble();
