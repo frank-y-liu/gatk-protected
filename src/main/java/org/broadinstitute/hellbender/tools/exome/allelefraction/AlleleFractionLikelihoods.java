@@ -3,6 +3,7 @@ package org.broadinstitute.hellbender.tools.exome.allelefraction;
 import com.google.common.primitives.Doubles;
 import org.apache.commons.math3.special.Gamma;
 import org.broadinstitute.hellbender.tools.exome.AllelicCount;
+import org.broadinstitute.hellbender.utils.GATKProtectedMathUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 
 import java.util.Collection;
@@ -73,15 +74,21 @@ public final class AlleleFractionLikelihoods {
         final int a = count.getAltReadCount();
         final int r = count.getRefReadCount();
 
+        return hetLogLikelihood(alpha, beta, minorFraction, pi, indicator, a, r);
+    }
+
+    public static double hetLogLikelihood(final double alpha, final double beta, final double minorFraction,
+                                          final double outlierProbability, final AlleleFractionIndicator indicator,
+                                          final int a, final int r) {
         if (indicator == AlleleFractionIndicator.OUTLIER) {
-            return log(pi) + log10ToLog(log10Factorial(a) + log10Factorial(r) - log10Factorial(a + r + 1));
+            return log(outlierProbability) + log10ToLog(log10Factorial(a) + log10Factorial(r) - log10Factorial(a + r + 1));
         } else {
             final double f = indicator == AlleleFractionIndicator.ALT_MINOR ? minorFraction : 1 - minorFraction;
-            return log((1 - pi) / 2) + logPhi(alpha, beta, f, a, r);
+            return log((1 - outlierProbability) / 2) + logPhi(alpha, beta, f, a, r);
         }
     }
 
-    public static double logPhi(final double alpha, final double beta, final double f, final int a, final int r) {
+    protected static double logPhi(final double alpha, final double beta, final double f, final int a, final int r) {
         final double lambda0 = lambda0(alpha, beta, f, a, r);
         final int n = a + r;
         final double kappa = kappa(alpha, f, r, n, lambda0);
@@ -92,21 +99,21 @@ public final class AlleleFractionLikelihoods {
         return logc + Gamma.logGamma(rho) - rho * log(tau);
     }
 
-    public static double lambda0(final double alpha, final double beta, final double f, final int a, final int r) {
+    protected static double lambda0(final double alpha, final double beta, final double f, final int a, final int r) {
         final double w = (1 - f) * (a - alpha + 1) + beta * f;
         return (sqrt(w * w + 4 * beta * f * (1 - f) * (r + alpha - 1)) - w) / (2 * beta * (1 - f));
     }
 
-    public static double kappa(final double alpha, final double f, final int r, final int n, final double lambda0) {
+    protected static double kappa(final double alpha, final double f, final int r, final int n, final double lambda0) {
         final double y = (1 - f)/(f + (1 - f) * lambda0);
         return n * y * y - (r + alpha - 1) / (lambda0 * lambda0);
     }
 
-    public static double rho(final double lambda0, final double kappa) {
+    protected static double rho(final double lambda0, final double kappa) {
         return 1 - kappa * lambda0 * lambda0;
     }
 
-    public static double tau(final double lambda0, final double kappa) {
+    protected static double tau(final double lambda0, final double kappa) {
         return -kappa * lambda0;
     }
 
@@ -120,7 +127,8 @@ public final class AlleleFractionLikelihoods {
      * @return the log of the likelihood at this het site, marginalized over indicator states.
      */
     public static double collapsedHetLogLikelihood(final AlleleFractionState state, final int segment, final AllelicCount count, final AllelicPanelOfNormals allelicPON) {
-        return logSumLog(hetLogLikelihood(state, segment, count, AlleleFractionIndicator.ALT_MINOR, allelicPON),
+        return GATKProtectedMathUtils.naturalLogSumExp(
+                hetLogLikelihood(state, segment, count, AlleleFractionIndicator.ALT_MINOR, allelicPON),
                 hetLogLikelihood(state, segment, count, AlleleFractionIndicator.REF_MINOR, allelicPON),
                 hetLogLikelihood(state, segment, count, AlleleFractionIndicator.OUTLIER, allelicPON));
     }
@@ -158,11 +166,5 @@ public final class AlleleFractionLikelihoods {
             final AlleleFractionState proposal = new AlleleFractionState(state.meanBias(), state.biasVariance(), state.outlierProbability(), minorFraction);
             return AlleleFractionLikelihoods.segmentLogLikelihood(proposal, 0, data.countsInSegment(segment), allelicPON);
         };
-    }
-
-    //compute log(e^a + e^b + e^c) = log(e^M [e^(a-M) + e^(b-M) + e^(c-M)]) where M = max(a,b,c)
-    private static double logSumLog(final double a, final double b, final double c) {
-        final double maxValue = Doubles.max(a, b, c);
-        return maxValue + Math.log(Math.exp(a-maxValue) + Math.exp(b-maxValue) + Math.exp(c-maxValue));
     }
 }
