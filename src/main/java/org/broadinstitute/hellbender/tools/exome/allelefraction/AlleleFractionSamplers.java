@@ -80,7 +80,7 @@ public final class AlleleFractionSamplers {
             if (data.numHetsInSegment(segmentIndex) == 0) {
                 return Double.NaN;
             }
-            return sampler.sample(AlleleFractionLikelihoods.logConditionalOnMinorFraction(state, data, segmentIndex));
+            return sampler.sample(AlleleFractionLikelihoods.segmentLogLikelihoodConditionalOnMinorFraction(state, data, segmentIndex));
         }
     }
 

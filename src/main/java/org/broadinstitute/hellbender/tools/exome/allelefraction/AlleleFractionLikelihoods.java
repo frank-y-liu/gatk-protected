@@ -1,8 +1,8 @@
 package org.broadinstitute.hellbender.tools.exome.allelefraction;
 
-import com.google.common.primitives.Doubles;
 import org.apache.commons.math3.special.Gamma;
 import org.broadinstitute.hellbender.tools.exome.AllelicCount;
+import org.broadinstitute.hellbender.tools.exome.AllelicCountCollection;
 import org.broadinstitute.hellbender.utils.GATKProtectedMathUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 
@@ -155,16 +155,30 @@ public final class AlleleFractionLikelihoods {
         return IntStream.range(0, data.numSegments()).mapToDouble(s -> segmentLogLikelihood(state, s, data.countsInSegment(s), data.getPON())).sum();
     }
 
-    protected static Function<Double, Double> logConditionalOnMinorFraction(final AlleleFractionState state,
-                                                                            final AlleleFractionData data, final int segment) {
-        return logConditionalOnMinorFraction(state, data, segment, AllelicPanelOfNormals.EMPTY_PON);
+    public static Function<Double, Double> segmentLogLikelihoodConditionalOnMinorFraction(final AlleleFractionState state,
+                                                                                          final AlleleFractionData data, final int segment) {
+        return segmentLogLikelihoodConditionalOnMinorFraction(state, data, segment, AllelicPanelOfNormals.EMPTY_PON);
     }
 
-    protected static Function<Double, Double> logConditionalOnMinorFraction(final AlleleFractionState state,
-                                                                            final AlleleFractionData data, final int segment, final AllelicPanelOfNormals allelicPON) {
+    public static Function<Double, Double> segmentLogLikelihoodConditionalOnMinorFraction(final AlleleFractionState state,
+                                                                                          final AlleleFractionData data, final int segment, final AllelicPanelOfNormals allelicPON) {
         return minorFraction -> {
             final AlleleFractionState proposal = new AlleleFractionState(state.meanBias(), state.biasVariance(), state.outlierProbability(), minorFraction);
             return AlleleFractionLikelihoods.segmentLogLikelihood(proposal, 0, data.countsInSegment(segment), allelicPON);
         };
+    }
+
+    public static double logLikelihoodForAllelicPanelOfNormals(final double meanBias, final double biasVariance, final AllelicCountCollection counts) {
+        final double alpha = alpha(meanBias, biasVariance);
+        final double beta = beta(meanBias, biasVariance);
+        return counts.getCounts().stream().mapToDouble(c -> AlleleFractionLikelihoods.logPhi(alpha, beta, 0.5, c.getAltReadCount(), c.getRefReadCount())).sum();
+    }
+
+    private static double alpha(final double meanBias, final double biasVariance) {
+        return meanBias * meanBias / biasVariance;
+    }
+
+    private static double beta(final double meanBias, final double biasVariance) {
+        return meanBias / biasVariance;
     }
 }

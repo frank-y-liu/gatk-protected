@@ -69,7 +69,7 @@ public final class AlleleFractionModeller {
         final double outlierProbabilityInitialStepSize = estimateWidthAtMode(outlierProbability ->
                 AlleleFractionLikelihoods.logLikelihood(initialState.shallowCopyWithProposedMeanBias(outlierProbability), data), initialState.outlierProbability());
         final List<Double> minorFractionsInitialStepSizes = IntStream.range(0, numSegments).mapToDouble(segment ->
-                estimateWidthAtMode(AlleleFractionLikelihoods.logConditionalOnMinorFraction(initialState, data, segment), initialState.minorFractionInSegment(segment)))
+                estimateWidthAtMode(AlleleFractionLikelihoods.segmentLogLikelihoodConditionalOnMinorFraction(initialState, data, segment), initialState.minorFractionInSegment(segment)))
                 .boxed().collect(Collectors.toList());
 
         final Sampler<Double, AlleleFractionState, AlleleFractionData> meanBiasSampler =

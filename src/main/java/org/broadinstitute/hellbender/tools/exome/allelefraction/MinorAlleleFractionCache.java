@@ -36,14 +36,14 @@ public final class MinorAlleleFractionCache {
         if (cache.containsKey(key)) {
             return cache.get(key);
         } else {
-            final double minorAlleleFraction = calculateMinorAlleleFraction(a, r, allelicBias);
+            final double minorAlleleFraction = estimateMinorAlleleFraction(a, r, allelicBias);
             cache.put(key, minorAlleleFraction);
             return minorAlleleFraction;
         }
     }
 
     //See docs/CNVs/CNV-methods.pdf for derivation of likelihood
-    private static double calculateMinorAlleleFraction(final int a, final int r, final double bias) {
+    private static double estimateMinorAlleleFraction(final int a, final int r, final double bias) {
         final double altFraction = (double) a / (a + r);
         final double initialEstimate = altFraction < 0.5 ? altFraction : 1. - altFraction;
         final SearchInterval searchInterval = new SearchInterval(0.0, 0.5, initialEstimate);

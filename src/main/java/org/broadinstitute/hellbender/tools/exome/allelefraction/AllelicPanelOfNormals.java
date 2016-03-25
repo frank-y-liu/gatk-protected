@@ -10,13 +10,10 @@ import org.broadinstitute.hellbender.tools.exome.AllelicCount;
 import org.broadinstitute.hellbender.tools.exome.AllelicCountCollection;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
-import org.broadinstitute.hellbender.utils.param.ParamUtils;
 
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
-
-import static java.lang.Math.sqrt;
 
 /**
  * Represents the panel of normals used for allele-bias correction.
@@ -47,17 +44,25 @@ public final class AllelicPanelOfNormals {
     }
 
     public double getAlpha(final SimpleInterval site) {
+        throwExceptionIfPoNIsEmpty();
         Utils.nonNull(site);
         return siteToHyperparameterPairMap.getOrDefault(site, mleHyperparameterValues).alpha;
     }
 
     public double getBeta(final SimpleInterval site) {
+        throwExceptionIfPoNIsEmpty();
         Utils.nonNull(site);
         return siteToHyperparameterPairMap.getOrDefault(site, mleHyperparameterValues).beta;
     }
 
-    public double getMLEMeanBias() { return mleMeanBias; }
-    public double getMLEBiasVariance() { return mleBiasVariance; }
+    public double getMLEMeanBias() {
+        throwExceptionIfPoNIsEmpty();
+        return mleMeanBias;
+    }
+    public double getMLEBiasVariance() {
+        throwExceptionIfPoNIsEmpty();
+        return mleBiasVariance;
+    }
 
     private class HyperparameterValues {
         private final double alpha;
@@ -95,7 +100,7 @@ public final class AllelicPanelOfNormals {
             previousIterationLogLikelihood = nextIterationLogLikelihood;
             meanBias = estimateMeanBias(meanBias, biasVariance, counts);
             biasVariance = estimateBiasVariance(meanBias, biasVariance, counts);
-            nextIterationLogLikelihood = logLikelihood(meanBias, biasVariance, counts);
+            nextIterationLogLikelihood = AlleleFractionLikelihoods.logLikelihoodForAllelicPanelOfNormals(meanBias, biasVariance, counts);
             logger.info(String.format("Iteration %d, model log likelihood = %.3f.", iteration, nextIterationLogLikelihood));
             iteration++;
         } while (iteration < AlleleFractionInitializer.MAX_ITERATIONS &&
@@ -111,22 +116,16 @@ public final class AllelicPanelOfNormals {
 
     private double estimateMeanBias(final double meanBias, final double biasVariance, final AllelicCountCollection counts) {
         final UnivariateObjectiveFunction objective = new UnivariateObjectiveFunction(proposedMeanBias ->
-                logLikelihood(proposedMeanBias, biasVariance, counts));
+                AlleleFractionLikelihoods.logLikelihoodForAllelicPanelOfNormals(proposedMeanBias, biasVariance, counts));
         final SearchInterval searchInterval = new SearchInterval(0.0, AlleleFractionInitializer.MAX_REASONABLE_MEAN_BIAS, meanBias);
         return AlleleFractionInitializer.OPTIMIZER.optimize(objective, GoalType.MAXIMIZE, searchInterval, AlleleFractionInitializer.BRENT_MAX_EVAL).getPoint();
     }
 
     private double estimateBiasVariance(final double meanBias, final double biasVariance, final AllelicCountCollection counts) {
         final UnivariateObjectiveFunction objective = new UnivariateObjectiveFunction(proposedBiasVariance ->
-                logLikelihood(meanBias, proposedBiasVariance, counts));
+                AlleleFractionLikelihoods.logLikelihoodForAllelicPanelOfNormals(meanBias, proposedBiasVariance, counts));
         final SearchInterval searchInterval = new SearchInterval(0.0, AlleleFractionInitializer.MAX_REASONABLE_BIAS_VARIANCE, biasVariance);
         return AlleleFractionInitializer.OPTIMIZER.optimize(objective, GoalType.MAXIMIZE, searchInterval, AlleleFractionInitializer.BRENT_MAX_EVAL).getPoint();
-    }
-
-    private double logLikelihood(final double meanBias, final double biasVariance, final AllelicCountCollection counts) {
-        final double alpha = alpha(meanBias, biasVariance);
-        final double beta = beta(meanBias, biasVariance);
-        return counts.getCounts().stream().mapToDouble(c -> AlleleFractionLikelihoods.logPhi(alpha, beta, 0.5, c.getAltReadCount(), c.getRefReadCount())).sum();
     }
 
     private void initializeSiteToHyperparameterPairMap(final AllelicCountCollection counts) {
@@ -141,6 +140,12 @@ public final class AllelicPanelOfNormals {
             }
         }
         logger.info("Allelic panel of normals initialized.");
+    }
+
+    private void throwExceptionIfPoNIsEmpty() {
+        if (this.equals(EMPTY_PON)) {
+            throw new UnsupportedOperationException("Cannot get MLE hyperparameters for empty panel of normals.");
+        }
     }
 
     private double alpha(final double meanBias, final double biasVariance) {
