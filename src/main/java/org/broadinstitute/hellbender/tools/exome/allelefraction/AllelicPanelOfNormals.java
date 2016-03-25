@@ -26,11 +26,15 @@ public final class AllelicPanelOfNormals {
     public static final AllelicPanelOfNormals EMPTY_PON = new AllelicPanelOfNormals();
 
     private final Map<SimpleInterval, HyperparameterValues> siteToHyperparameterPairMap = new HashMap<>();
-    private HyperparameterValues mleHyperparameterValues;
-    private double mleMeanBias;
-    private double mleBiasVariance;
+    private final HyperparameterValues mleHyperparameterValues;
+    private final double mleMeanBias;
+    private final double mleBiasVariance;
 
-    public AllelicPanelOfNormals() {}
+    private AllelicPanelOfNormals() {
+        mleHyperparameterValues = new HyperparameterValues(Double.NaN, Double.NaN);
+        mleMeanBias = Double.NaN;
+        mleBiasVariance = Double.NaN;
+    }
 
     public AllelicPanelOfNormals(final File inputFile) {
         Utils.nonNull(inputFile);
