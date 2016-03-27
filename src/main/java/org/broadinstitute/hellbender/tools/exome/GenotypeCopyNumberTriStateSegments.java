@@ -20,7 +20,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 /**
  * Genotype predetermined segments passed in the inputs together with the targets and their coverage per sample.
@@ -42,7 +41,6 @@ public final class GenotypeCopyNumberTriStateSegments extends CopyNumberTriState
 
     public static final String DISCOVERY_FILE_SHORT_NAME = "segments";
     public static final String DISCOVERY_FILE_FULL_NAME = "segmentsFile";
-    public static final String ALT_KEY = "ALT";
 
     public static final String DISCOVERY_TRUE = "Y";
     public static final String DISCOVERY_FALSE = "N";
@@ -69,8 +67,7 @@ public final class GenotypeCopyNumberTriStateSegments extends CopyNumberTriState
         final VCFHeader result = new VCFHeader(Collections.emptySet(), sampleNames);
 
         result.addMetaDataLine(new VCFHeaderLine(VCFHeaderVersion.VCF4_2.getFormatString(), VCFHeaderVersion.VCF4_2.getVersionString()));
-        result.addMetaDataLine(CNVAllele.DEL.altHeaderLine("Represents a deletion with respect to reference copy number"));
-        result.addMetaDataLine(CNVAllele.DUP.altHeaderLine("Represents a duplication with respect to reference copy number"));
+        CNVAllele.addHeaderLinesTo(result);
         result.addMetaDataLine(new VCFHeaderLine("command",this.getCommandLine()));
 
         // FORMAT.
@@ -106,59 +103,6 @@ public final class GenotypeCopyNumberTriStateSegments extends CopyNumberTriState
             outputWriter.add(variant);
         }
     }
-
-    /**
-     * Enum of possible CNV alleles.
-     */
-    public enum CNVAllele {
-        REF(CopyNumberTriState.NEUTRAL, true), DEL(CopyNumberTriState.DELETION, false), DUP(CopyNumberTriState.DUPLICATION, false);
-
-        public final Allele allele;
-        public final CopyNumberTriState state;
-
-        public static final List<CNVAllele> ALL_CNV_ALLELES = Collections.unmodifiableList(Arrays.asList(values()));
-        public static final List<CNVAllele> ALTERNATIVE_CNV_ALLELES = ALL_CNV_ALLELES.subList(1, 3);
-        public static final List<Allele> ALL_ALLELES = Collections.unmodifiableList(ALL_CNV_ALLELES.stream()
-                        .map(a -> a.allele).collect(Collectors.toList()));
-
-        CNVAllele(final CopyNumberTriState state, final boolean isRef) {
-            this.state = state;
-            allele = isRef ? Allele.create("N", true) : Allele.create("<" + name() + ">");
-        }
-
-        public VCFSimpleHeaderLine altHeaderLine(final String description) {
-            if (allele.isReference()) {
-                throw new UnsupportedOperationException("you cannot ask for an ALT header line on a reference allele");
-            }
-            return new VCFSimpleHeaderLine(ALT_KEY, name(), Utils.nonNull(description));
-        }
-
-        /**
-         * Returns the value whose allele is the same as the one provided.
-         * @param allele the query allele.
-         * @return never {@code null}.
-         * @throws IllegalArgumentException if the input allele is {@code null} or there is no
-         * value with such an allele.
-         */
-        public static CNVAllele valueOf(final Allele allele) {
-            Utils.nonNull(allele, "the input allele cannot be null");
-            return Stream.of(values()).filter(v -> v.allele.equals(allele)).findFirst().orElseThrow(IllegalArgumentException::new);
-        }
-
-        /**
-         * Returns the value whose state is the same as the one provided.
-         * @param state the query state.
-         * @return never {@code null}.
-         * @throws IllegalArgumentException if the input state is {@code null} or there is no
-         * value with such a state.
-         */
-        public static CNVAllele valueOf(final CopyNumberTriState state) {
-            Utils.nonNull(state, "the input state cannot be null");
-            return Stream.of(values()).filter(v -> v.state.equals(state)).findFirst().orElseThrow(IllegalArgumentException::new);
-        }
-    }
-
-
 
 
     private VariantContext composeVariantContext(final GenotypingSegment segment,
