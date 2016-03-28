@@ -8,6 +8,7 @@
 \usepackage{color}
 
 %Put an averaged random variable between brackets
+\DeclareMathOperator*{\argmax}{\arg\!\max}
 \newcommand{\ave}[1]{\left\langle #1 \right\rangle}
 
 \newtheorem{lemma}{Lemma}
@@ -482,6 +483,48 @@ p(f, \pi) \propto \prod_j
 \end{equation}
 %
 where $f$ and $\pi$ may once again be sampled via adaptive Metropolis.
+
+\subsection{HMM-based segmentation of somatic CNVs} \label{HMM-segmentation}
+In CNV segmentation, the hidden states are defined at genomic loci -- targets or SNPs.  The transition matrix of an HMM for segmentation will be a function of the distances between consecutive loci, similar to what already exists in our germline code.  The emission likelihoods of the HMM will be given by probabilistic models for allele counts at het sites (which we already have) and total coverage of targets (another proposed method).  Broadly speaking, all that remains is to define the hidden states and to tweak the transition model for the somatic case.  For concreteness we will begin the discussion in terms of het allele fraction segmentation.
+
+We already have a probabilistic model $P(a_i, r_i | f_i)$, where $a_i$ and $r_i$ are observed alt and ref allele counts at het site $i$ and $f_i$ is the underlying minor allele fraction of the segment to which this het belongs.  This is the emission likelihood of our HMM.  The hidden states are therefore are discrete set of minor allele fractions $f$.  The discreteness of these states follows from the discreteness of the tumor's phylogeny.  In order to learn a finite set of minor allele fractions without knowing its size a priori we will choose some sufficiently large number (i.e. an overestimate of the number of different values of $f$) $K$ combined with a sparsity-promoting Dirichlet prior on the multinomial weights for the different values of $f$.  A simple idea for the transition matrix would be to assume some ``memory-loss` scale $D$, so that the probability of forgetting the current CNV state over $d$ bases is $e^{-d/D}$.  If memory is lost, a new CNV state is chosen from a multinomial distribution.  This could be achieved either by augmenting the graphical model with binary nodes for memory loss or by retaining the simple HMM architecture but augmenting the state space.  We choose the latter option for simplicity of implementation.
+
+Hidden states have two labels, $k \in \{1, \, \ldots K \}$ and $s \in \{0, \, 1 \}$, where $k$ selects the minor allele fraction $f_k$ and $s = 1$ represents a ``switch'' (memory loss) state.  We give each hidden state $f_k$ a weight $\pi_k$ for each $f_k$, so that the the transition probabilities for het sites a distance $d$ bases apart is
+%
+\begin{equation}
+P(k,s \rightarrow k^\prime, s^\prime) = \left\{  \begin{array}{cc} e^{-d/D} \delta_{k, k^\prime} & s^\prime = 0 \\ (1-e^{-d/D}) \pi_{k^\prime} & s^\prime = 1     \end{array}  \right.
+\end{equation}
+%
+We encourage sparsity by placing a symmetric Dirichlet prior with concentration parameter $\alpha$, $\pi | \alpha \sim {\rm Dir}(\alpha/K, \ldots \alpha /K)$, on $\pi$.  Letting $z_{iks}$ be a binary indicator for hidden state $(s,k)$ at het site $i$, the model likelihood is
+\begin{equation}
+P(\alpha)  \left( \frac{ \Gamma(\alpha) }{\Gamma(\alpha/K)^K} \prod_k \pi_k^{\alpha/K - 1} \right) \left(  \prod_{i,s,k} P(a_i, r_i | f_k)^{z_{isk}} \right) \left( \prod_{i,s,k,s^\prime, k^\prime} \left( e^{-d/D} \delta_{k, k^\prime} \delta_{s^\prime,0} +  (1 - e^{-d/D}) \pi_{k^\prime} \delta_{s^\prime,1} \right)^{z_{i+1,s^\prime, k^\prime}} \right)
+\label{HMM_likelihood}
+\end{equation}
+
+Using the forward-backward algorithm, which is already in our code base, we can obtain exact posterior probabilities $E[z_{isk}]$ of each hidden state, which constitutes the E step of an EM approach to learning $\pi$, $f$, and $D$.  Taking the logarithm of Equation \ref{HMM_likelihood} we can read off the M step equations.  The M step for $D$ is
+\begin{equation}
+D = \argmax_D \sum_{i,k} \left( E[z_{i, s=0, k}] \ln e^{-d_i/D} +  E[z_{i, s=1, k}] \ln (1 - e^{-d_i/D}) \right)
+\end{equation}
+The M step for $f_k$ is
+\begin{equation}
+f_k = \argmax_f \sum_{i,s} E[z_{i,s,k}] \ln P(a_i, r_i | f)
+\end{equation}
+
+Due to the singularity of the Dirichlet prior we must use variational Bayes, rather than maximum likelihood, on $\pi$.  The M step posterior on $\pi$ is, due to conjugacy, another Dirichlet with pseudocounts derived from the likelihood.  By inspection, this posterior is
+%
+\begin{equation}
+q(\pi) = {\rm Dir}(\pi | \alpha/K + N_1, \ldots \alpha/K + N_2), \, N_k \equiv \sum_{i} E[z_{i, s=1, k}]
+\end{equation}
+%
+It is easily seen that the correct variational Bayes prescription for $\pi_k$ to be used in the E step for $z$ and the M step for $\alpha$ is the replacement $\pi_k \rightarrow \bar{\pi}_k \equiv \exp E_{q(\pi)}[\ln \pi_k]$. The standard analytic result for this is
+\begin{equation}
+E[\ln \pi_k] = \psi(\alpha/K + N_k) - \psi(\alpha + \sum_k N_k)
+\end{equation}
+where $\psi$ is the digamma function.
+
+It is also seen by inspection that the effective value of $\alpha$ to be used in the M step for $\pi$ is the mean $\bar{\alpha}$ of the posterior $q(\alpha)$ (that is, the part of the likelihood containing $\alpha$ with the replacement $\pi_k \rightarrow \bar{\pi}_k$), which amounts to a simple 1-D quadrature.  Thus the M step amounts to $K + 1$ numerical optimizations (for $D$ and $\{ f_k \}$) of objectives containing $T$ terms each along with several very cheap operations.  The E step's time complexity is the cost $O(K^2 T)$ of the forward-backward algorithm.  We note that since the allele fraction model requires segmentation information, during EM iteration we should also perform segmentations via the Viterbi algorithm and relearn the parameters of the allele fraction model.  The Viterbi algorithm also has cost $O(K^2 T)$.
+
+The framework we described above works equally well for hidden copy ratio states, provided we have a generative model for copy ratio with an associated likelihood.  Furthermore, by using two-dimensional hidden states containing minor allele fraction and copy ratio we may segment both simultaneously.  The HMM machinery has no difficulty with heterogeneous emission likelihoods.
 %%%APPENDICES
 \appendix
 
