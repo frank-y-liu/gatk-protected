@@ -1,17 +1,25 @@
 package org.broadinstitute.hellbender.tools.exome.allelefraction;
 
 import htsjdk.samtools.util.Log;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.broadinstitute.hellbender.engine.spark.SparkContextFactory;
+import org.broadinstitute.hellbender.tools.exome.*;
 import org.broadinstitute.hellbender.utils.LoggingUtils;
+import org.broadinstitute.hellbender.utils.SimpleInterval;
+import org.broadinstitute.hellbender.utils.mcmc.PosteriorSummary;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Test the MCMC inference of the {@link AlleleFractionModeller}.
+ * Tests the MCMC inference of the {@link AlleleFractionModeller}.
  *
  * @author David Benjamin &lt;davidben@broadinstitute.org&gt;
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
@@ -19,7 +27,13 @@ import java.util.stream.Collectors;
 public final class AlleleFractionModellerUnitTest extends BaseTest {
     private static final String TEST_SUB_DIR = publicTestDir + "org/broadinstitute/hellbender/tools/exome/";
 
-    private static final File ALLELIC_PON_FILE = new File(TEST_SUB_DIR, "allelic-pon-for-acnv-modeller.tsv");
+    private static final File ALLELIC_PON_NORMAL_FILE = new File(TEST_SUB_DIR, "allelic-pon-test-pon-normal.tsv");
+    private static final File ALLELIC_PON_EVENT_FILE = new File(TEST_SUB_DIR, "allelic-pon-test-pon-event.tsv");
+
+    private static final File SAMPLE_NORMAL_FILE = new File(TEST_SUB_DIR, "allelic-pon-test-sample-normal.tsv");
+    private static final File SAMPLE_EVENT_FILE = new File(TEST_SUB_DIR, "allelic-pon-test-sample-event.tsv");
+
+    private static final File SEGMENTS_FILE = new File(TEST_SUB_DIR, "allelic-pon-test-segments.seg");
 
     @Test
     public void testMCMCWithoutAllelicPON() {
@@ -29,11 +43,19 @@ public final class AlleleFractionModellerUnitTest extends BaseTest {
         testMCMC(meanBias, biasVariance, AllelicPanelOfNormals.EMPTY_PON);
     }
 
+    /**
+     * Note that these MCMC tests were written to use simulated hets before the allelic PON was introduced.
+     * Rather than generate a simulated PON on the fly, we simply use a fixed PON loaded from a file
+     * and check that its hyperparameters are recovered correctly---i.e., the PON is not actually used to
+     * to correct reference bias in the simulated data in any way. This latter functionality is tested
+     * below instead.
+     * TODO change so that simulated data is made with different alpha and beta than PON and that PON values are recovered
+     */
     @Test
     public void testMCMCWithAllelicPON() {
-        final double meanBias = 1.09;       //should match value in ALLELIC_PON_FILE
-        final double biasVariance = 0.018;  //should match value in ALLELIC_PON_FILE
-        final AllelicPanelOfNormals allelicPON = new AllelicPanelOfNormals(ALLELIC_PON_FILE);
+        final double meanBias = 1.083;
+        final double biasVariance = 0.0181;
+        final AllelicPanelOfNormals allelicPON = new AllelicPanelOfNormals(ALLELIC_PON_NORMAL_FILE);
         testMCMC(meanBias, biasVariance, allelicPON);
     }
 
@@ -95,5 +117,28 @@ public final class AlleleFractionModellerUnitTest extends BaseTest {
         Assert.assertEquals(mcmcBiasVariance, biasVariance, biasVarianceTolerance);
         Assert.assertEquals(mcmcOutlierProbabilityr, outlierProbability, outlierProbabilityTolerance);
         Assert.assertEquals(totalSegmentError / numSegments, 0.0, minorFractionTolerance);
+    }
+
+    @Test
+    private void testEvent() {
+        LoggingUtils.setLoggingLevel(Log.LogLevel.INFO);
+        final JavaSparkContext ctx = SparkContextFactory.getTestSparkContext();
+
+        final int numSamples = 100;
+        final int numBurnIn = 25;
+
+        final AllelicPanelOfNormals allelicPON = new AllelicPanelOfNormals(ALLELIC_PON_EVENT_FILE);
+        final AllelicCountCollection sample = new AllelicCountCollection(SAMPLE_EVENT_FILE);
+        final List<TargetCoverage> emptyTargets = new ArrayList<>();
+        final Genome genome = new Genome(emptyTargets, sample.getCounts(), "test");
+        final List<SimpleInterval> segments = SegmentUtils.readIntervalsFromSegmentFile(SEGMENTS_FILE);
+        final SegmentedModel segmentedModel = new SegmentedModel(segments, genome);
+
+        final AlleleFractionModeller modeller = new AlleleFractionModeller(segmentedModel, allelicPON);
+        modeller.fitMCMC(numSamples, numBurnIn);
+
+        final List<PosteriorSummary> minorAlleleFractionPosteriorSummaries =
+                modeller.getMinorAlleleFractionsPosteriorSummaries(0.05, ctx);
+        System.out.println(minorAlleleFractionPosteriorSummaries.stream().map(s -> Arrays.asList(s.getLower(), s.getCenter(), s.getUpper())).collect(Collectors.toList()));
     }
 }

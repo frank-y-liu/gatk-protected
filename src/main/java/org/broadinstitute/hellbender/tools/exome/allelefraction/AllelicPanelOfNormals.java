@@ -36,15 +36,21 @@ public final class AllelicPanelOfNormals {
         mleBiasVariance = Double.NaN;
     }
 
-    public AllelicPanelOfNormals(final File inputFile) {
-        Utils.nonNull(inputFile);
-        Utils.regularReadableUserFile(inputFile);
-
-        final AllelicCountCollection counts = new AllelicCountCollection(inputFile);
+    public AllelicPanelOfNormals(final AllelicCountCollection counts) {
         mleHyperparameterValues = calculateMLEHyperparameterValues(counts);
         mleMeanBias = meanBias(mleHyperparameterValues.alpha, mleHyperparameterValues.beta);
         mleBiasVariance = biasVariance(mleHyperparameterValues.alpha, mleHyperparameterValues.beta);
         initializeSiteToHyperparameterPairMap(counts);
+    }
+
+    public AllelicPanelOfNormals(final File inputFile) {
+        this(new AllelicCountCollection(validateFile(inputFile)));
+    }
+
+    private static File validateFile(final File inputFile) {
+        Utils.nonNull(inputFile);
+        Utils.regularReadableUserFile(inputFile);
+        return inputFile;
     }
 
     public double getAlpha(final SimpleInterval site) {
