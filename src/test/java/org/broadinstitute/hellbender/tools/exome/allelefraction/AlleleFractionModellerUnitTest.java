@@ -38,10 +38,9 @@ public final class AlleleFractionModellerUnitTest extends BaseTest {
 
     @Test
     public void testMCMCWithoutAllelicPON() {
-        final double meanBias = 1.1;
-        final double biasVariance = 0.01;
-
-        testMCMC(meanBias, biasVariance, AllelicPanelOfNormals.EMPTY_PON);
+        final double meanBiasSimulated = 1.2;
+        final double biasVarianceSimulated = 0.04;
+        testMCMC(meanBiasSimulated, biasVarianceSimulated, meanBiasSimulated, biasVarianceSimulated, AllelicPanelOfNormals.EMPTY_PON);
     }
 
     /**
@@ -54,22 +53,25 @@ public final class AlleleFractionModellerUnitTest extends BaseTest {
      */
     @Test
     public void testMCMCWithAllelicPON() {
-        final double meanBias = 1.083;
-        final double biasVariance = 0.0181;
+        final double meanBiasSimulated = 1.2;
+        final double biasVarianceSimulated = 0.04;
+        final double meanBiasOfPON = 1.083;
+        final double biasVarianceOfPON = 0.0181;
         final AllelicPanelOfNormals allelicPON = new AllelicPanelOfNormals(ALLELIC_PON_NORMAL_FILE);
-        testMCMC(meanBias, biasVariance, allelicPON);
+        testMCMC(meanBiasSimulated, biasVarianceSimulated, meanBiasOfPON, biasVarianceOfPON, allelicPON);
     }
 
-    private void testMCMC(final double meanBias, final double biasVariance, final AllelicPanelOfNormals allelicPON) {
+    private void testMCMC(final double meanBiasSimulated, final double biasVarianceSimulated,
+                          final double meanBiasExpected, final double biasVarianceExpected,
+                          final AllelicPanelOfNormals allelicPON) {
         LoggingUtils.setLoggingLevel(Log.LogLevel.INFO);
 
-        final int numSamples = 300;
-        final int numBurnIn = 100;
+        final int numSamples = 150;
+        final int numBurnIn = 50;
 
         final double averageHetsPerSegment = 50;
         final int numSegments = 100;
         final int averageDepth = 50;
-
 
         final double outlierProbability = 0.02;
 
@@ -80,7 +82,7 @@ public final class AlleleFractionModellerUnitTest extends BaseTest {
         final double biasVarianceTolerance = 0.01;
         final double outlierProbabilityTolerance = 0.02;
         final AlleleFractionSimulatedData simulatedData = new AlleleFractionSimulatedData(averageHetsPerSegment, numSegments,
-                averageDepth, meanBias, biasVariance, outlierProbability);
+                averageDepth, meanBiasSimulated, biasVarianceSimulated, outlierProbability);
 
         final AlleleFractionModeller model = new AlleleFractionModeller(simulatedData.getSegmentedModel(), allelicPON);
         model.fitMCMC(numSamples, numBurnIn);
@@ -114,8 +116,8 @@ public final class AlleleFractionModellerUnitTest extends BaseTest {
             totalSegmentError += Math.abs(mcmcMinorFractions.get(segment) - simulatedData.getTrueState().minorFractionInSegment(segment));
         }
 
-        Assert.assertEquals(mcmcMeanBias, meanBias, meanBiasTolerance);
-        Assert.assertEquals(mcmcBiasVariance, biasVariance, biasVarianceTolerance);
+        Assert.assertEquals(mcmcMeanBias, meanBiasExpected, meanBiasTolerance);
+        Assert.assertEquals(mcmcBiasVariance, biasVarianceExpected, biasVarianceTolerance);
         Assert.assertEquals(mcmcOutlierProbabilityr, outlierProbability, outlierProbabilityTolerance);
         Assert.assertEquals(totalSegmentError / numSegments, 0.0, minorFractionTolerance);
     }
@@ -128,7 +130,7 @@ public final class AlleleFractionModellerUnitTest extends BaseTest {
         final int numSamples = 100;
         final int numBurnIn = 25;
 
-        final AllelicPanelOfNormals allelicPON = new AllelicPanelOfNormals(ALLELIC_PON_EVENT_FILE);
+        final AllelicPanelOfNormals allelicPON = new AllelicPanelOfNormals(ALLELIC_PON_NORMAL_FILE);
         final AllelicCountCollection sample = new AllelicCountCollection(SAMPLE_EVENT_FILE);
         final List<TargetCoverage> emptyTargets = new ArrayList<>();
         final Genome genome = new Genome(emptyTargets, sample.getCounts(), "test");
