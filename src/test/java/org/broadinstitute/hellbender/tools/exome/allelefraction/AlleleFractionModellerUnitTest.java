@@ -6,6 +6,7 @@ import org.broadinstitute.hellbender.engine.spark.SparkContextFactory;
 import org.broadinstitute.hellbender.tools.exome.*;
 import org.broadinstitute.hellbender.utils.LoggingUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
+import org.broadinstitute.hellbender.utils.mcmc.Decile;
 import org.broadinstitute.hellbender.utils.mcmc.PosteriorSummary;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
 import org.testng.Assert;
@@ -139,6 +140,6 @@ public final class AlleleFractionModellerUnitTest extends BaseTest {
 
         final List<PosteriorSummary> minorAlleleFractionPosteriorSummaries =
                 modeller.getMinorAlleleFractionsPosteriorSummaries(0.05, ctx);
-        System.out.println(minorAlleleFractionPosteriorSummaries.stream().map(s -> Arrays.asList(s.getLower(), s.getCenter(), s.getUpper())).collect(Collectors.toList()));
+        System.out.println(minorAlleleFractionPosteriorSummaries.stream().map(s -> s.getDeciles().getAll()).collect(Collectors.toList()));
     }
 }

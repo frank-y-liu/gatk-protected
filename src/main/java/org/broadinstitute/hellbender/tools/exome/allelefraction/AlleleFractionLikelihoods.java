@@ -157,14 +157,9 @@ public final class AlleleFractionLikelihoods {
 
     public static Function<Double, Double> segmentLogLikelihoodConditionalOnMinorFraction(final AlleleFractionState state,
                                                                                           final AlleleFractionData data, final int segment) {
-        return segmentLogLikelihoodConditionalOnMinorFraction(state, data, segment, AllelicPanelOfNormals.EMPTY_PON);
-    }
-
-    public static Function<Double, Double> segmentLogLikelihoodConditionalOnMinorFraction(final AlleleFractionState state,
-                                                                                          final AlleleFractionData data, final int segment, final AllelicPanelOfNormals allelicPON) {
         return minorFraction -> {
             final AlleleFractionState proposal = new AlleleFractionState(state.meanBias(), state.biasVariance(), state.outlierProbability(), minorFraction);
-            return AlleleFractionLikelihoods.segmentLogLikelihood(proposal, 0, data.countsInSegment(segment), allelicPON);
+            return AlleleFractionLikelihoods.segmentLogLikelihood(proposal, 0, data.countsInSegment(segment), data.getPON());
         };
     }
 
