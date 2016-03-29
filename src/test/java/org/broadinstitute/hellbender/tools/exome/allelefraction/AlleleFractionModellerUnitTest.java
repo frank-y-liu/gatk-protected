@@ -48,8 +48,8 @@ public final class AlleleFractionModellerUnitTest extends BaseTest {
     /**
      * Test MCMC inference on simulated data using an allelic PON.  Note that these MCMC tests were written to use
      * simulated hets before the allelic PON was introduced.  Rather than generate a simulated PON on the fly,
-     * we simply use a fixed PON loaded from a file and check that its MLE hyperparameters are "sampled" correctly
-     * by simply taking the MLE PON values---i.e., the PON does not actually cover the simulated sites and
+     * we simply use a fixed simulated PON loaded from a file and check that its MLE hyperparameters are "sampled"
+     * correctly by simply taking the MLE PON values---i.e., the PON does not actually cover the simulated sites and
      * hence is not used to correct reference bias in the simulated data in any way.
      * This latter functionality is tested on fixed data loaded from files in
      * {@link AlleleFractionModellerUnitTest#testBiasCorrection} instead.
@@ -58,8 +58,8 @@ public final class AlleleFractionModellerUnitTest extends BaseTest {
     public void testMCMCWithAllelicPON() {
         final double meanBiasSimulated = 1.2;
         final double biasVarianceSimulated = 0.04;
-        final double meanBiasOfPON = 1.083;         // alpha = 65
-        final double biasVarianceOfPON = 0.0181;    // beta = 60
+        final double meanBiasOfPON = 1.083;         // PON generated with alpha = 65
+        final double biasVarianceOfPON = 0.0181;    // PON generated with beta = 60
         final AllelicPanelOfNormals allelicPON = new AllelicPanelOfNormals(ALLELIC_PON_NORMAL_FILE);
         testMCMC(meanBiasSimulated, biasVarianceSimulated, meanBiasOfPON, biasVarianceOfPON, allelicPON);
     }
@@ -69,8 +69,8 @@ public final class AlleleFractionModellerUnitTest extends BaseTest {
                           final AllelicPanelOfNormals allelicPON) {
         LoggingUtils.setLoggingLevel(Log.LogLevel.INFO);
 
-        final int numSamples = 100;
-        final int numBurnIn = 25;
+        final int numSamples = 150;
+        final int numBurnIn = 50;
 
         final double averageHetsPerSegment = 50;
         final int numSegments = 100;
