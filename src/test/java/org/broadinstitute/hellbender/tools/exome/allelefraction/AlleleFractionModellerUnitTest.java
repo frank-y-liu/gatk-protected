@@ -10,6 +10,7 @@ import org.broadinstitute.hellbender.utils.mcmc.Decile;
 import org.broadinstitute.hellbender.utils.mcmc.PosteriorSummary;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
 import org.testng.Assert;
+import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 import java.io.File;
@@ -31,11 +32,14 @@ public final class AlleleFractionModellerUnitTest extends BaseTest {
     private static final File ALLELIC_PON_NORMAL_FILE = new File(TEST_SUB_DIR, "allelic-pon-test-pon-normal.tsv");
     private static final File ALLELIC_PON_EVENT_FILE = new File(TEST_SUB_DIR, "allelic-pon-test-pon-event.tsv");
 
-    private static final File SAMPLE_NORMAL_FILE = new File(TEST_SUB_DIR, "allelic-pon-test-sample-normal.tsv");
     private static final File SAMPLE_EVENT_FILE = new File(TEST_SUB_DIR, "allelic-pon-test-sample-event.tsv");
 
     private static final File SEGMENTS_FILE = new File(TEST_SUB_DIR, "allelic-pon-test-segments.seg");
 
+    /**
+     * Test MCMC inference on simulated data.  Note that hyperparameter values used to generate the data should be recovered
+     * along with outlier probability and minor fractions.
+     */
     @Test
     public void testMCMCWithoutAllelicPON() {
         final double meanBiasSimulated = 1.2;
@@ -44,19 +48,20 @@ public final class AlleleFractionModellerUnitTest extends BaseTest {
     }
 
     /**
-     * Note that these MCMC tests were written to use simulated hets before the allelic PON was introduced.
-     * Rather than generate a simulated PON on the fly, we simply use a fixed PON loaded from a file
-     * and check that its hyperparameters are recovered correctly---i.e., the PON is not actually used to
-     * to correct reference bias in the simulated data in any way. This latter functionality is tested
-     * below instead.
-     * TODO change so that simulated data is made with different alpha and beta than PON and that PON values are recovered
+     * Test MCMC inference on simulated data using an allelic PON.  Note that these MCMC tests were written to use
+     * simulated hets before the allelic PON was introduced.  Rather than generate a simulated PON on the fly,
+     * we simply use a fixed PON loaded from a file and check that its MLE hyperparameters are "sampled" correctly
+     * by simply taking the MLE PON values---i.e., the PON does not actually cover the simulated sites and
+     * hence is not used to correct reference bias in the simulated data in any way.
+     * This latter functionality is tested on fixed data loaded from files in
+     * {@link AlleleFractionModellerUnitTest#testBiasCorrection} instead.
      */
     @Test
     public void testMCMCWithAllelicPON() {
         final double meanBiasSimulated = 1.2;
         final double biasVarianceSimulated = 0.04;
-        final double meanBiasOfPON = 1.083;
-        final double biasVarianceOfPON = 0.0181;
+        final double meanBiasOfPON = 1.083;         // alpha = 65
+        final double biasVarianceOfPON = 0.0181;    // beta = 60
         final AllelicPanelOfNormals allelicPON = new AllelicPanelOfNormals(ALLELIC_PON_NORMAL_FILE);
         testMCMC(meanBiasSimulated, biasVarianceSimulated, meanBiasOfPON, biasVarianceOfPON, allelicPON);
     }
@@ -66,8 +71,8 @@ public final class AlleleFractionModellerUnitTest extends BaseTest {
                           final AllelicPanelOfNormals allelicPON) {
         LoggingUtils.setLoggingLevel(Log.LogLevel.INFO);
 
-        final int numSamples = 150;
-        final int numBurnIn = 50;
+        final int numSamples = 100;
+        final int numBurnIn = 25;
 
         final double averageHetsPerSegment = 50;
         final int numSegments = 100;
@@ -122,26 +127,57 @@ public final class AlleleFractionModellerUnitTest extends BaseTest {
         Assert.assertEquals(totalSegmentError / numSegments, 0.0, minorFractionTolerance);
     }
 
-    @Test
-    private void testEvent() {
+    @DataProvider(name = "biasCorrection")
+    public Object[][] dataBiasCorrection() {
+        return new Object[][]{
+                {new AllelicPanelOfNormals(ALLELIC_PON_EVENT_FILE), 0.5},
+                {new AllelicPanelOfNormals(ALLELIC_PON_NORMAL_FILE), 0.4}
+        };
+    }
+
+    /**
+     * Tests that the allelic PoN is appropriately used to correct bias.  The basic set up for the test data is
+     * simulated hets at 1000 sites (1:1-1000) across 3 segments in a normal.  In the middle segment consisting of
+     * 100 sites (1:451-550), all of the sites have relatively high reference bias
+     * (alpha = 9, beta = 6 -> mean bias = 1.5, as compared to alpha = 65, beta = 60 -> mean bias = 1.083 for the
+     * rest of the sites).  In this segment, without using a PON that knows about the high reference bias of these sites
+     * we would infer a minor-allele fraction of 6 / (6 + 9) = 0.40; however, with the PON we correctly infer that all
+     * of the segments are balanced.
+     *
+     * <p>
+     *     Note that alpha and beta are not actually correctly recovered in this PON via MLE because the biases
+     *     drawn from a mixture of gamma distributions (as opposed to a single gamma distribution as assumed in the model).
+     *     TODO https://github.com/broadinstitute/gatk-protected/issues/421
+     * </p>
+     */
+    @Test(dataProvider = "biasCorrection")
+    public void testBiasCorrection(final AllelicPanelOfNormals allelicPON, final double minorFractionExpectedInMiddleSegment) {
         LoggingUtils.setLoggingLevel(Log.LogLevel.INFO);
         final JavaSparkContext ctx = SparkContextFactory.getTestSparkContext();
 
-        final int numSamples = 100;
-        final int numBurnIn = 25;
+        final double minorFractionTolerance = 0.025;
 
-        final AllelicPanelOfNormals allelicPON = new AllelicPanelOfNormals(ALLELIC_PON_NORMAL_FILE);
+        // set up test data
         final AllelicCountCollection sample = new AllelicCountCollection(SAMPLE_EVENT_FILE);
-        final List<TargetCoverage> emptyTargets = new ArrayList<>();
+        final List<TargetCoverage> emptyTargets = new ArrayList<>();    // no targets in test data
         final Genome genome = new Genome(emptyTargets, sample.getCounts(), "test");
         final List<SimpleInterval> segments = SegmentUtils.readIntervalsFromSegmentFile(SEGMENTS_FILE);
         final SegmentedModel segmentedModel = new SegmentedModel(segments, genome);
 
+        final int numSamples = 100;
+        final int numBurnIn = 25;
         final AlleleFractionModeller modeller = new AlleleFractionModeller(segmentedModel, allelicPON);
         modeller.fitMCMC(numSamples, numBurnIn);
 
+        final double credibleAlpha = 0.05;
         final List<PosteriorSummary> minorAlleleFractionPosteriorSummaries =
-                modeller.getMinorAlleleFractionsPosteriorSummaries(0.05, ctx);
-        System.out.println(minorAlleleFractionPosteriorSummaries.stream().map(s -> s.getDeciles().getAll()).collect(Collectors.toList()));
+                modeller.getMinorAlleleFractionsPosteriorSummaries(credibleAlpha, ctx);
+        final List<Double> minorFractionsResult = minorAlleleFractionPosteriorSummaries.stream().map(PosteriorSummary::getCenter).collect(Collectors.toList());
+
+        final double minorFractionBalanced = 0.5;
+        final List<Double> minorFractionsExpected = Arrays.asList(minorFractionBalanced, minorFractionExpectedInMiddleSegment, minorFractionBalanced);
+        for (int segment = 0; segment < 3; segment++) {
+            Assert.assertEquals(minorFractionsResult.get(segment), minorFractionsExpected.get(segment), minorFractionTolerance);
+        }
     }
 }
