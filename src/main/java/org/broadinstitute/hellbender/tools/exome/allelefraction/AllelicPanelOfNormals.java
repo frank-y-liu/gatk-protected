@@ -16,7 +16,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Represents the panel of normals used for allele-bias correction.
+ * Represents the panel of normals used for allele-bias correction.  See docs/CNVs/CNV-methods.pdf.
  *
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
@@ -36,6 +36,11 @@ public final class AllelicPanelOfNormals {
         mleBiasVariance = Double.NaN;
     }
 
+    /**
+     * Constructs an allelic panel of normals from an {@link AllelicCountCollection} that contains
+     * total alt and ref counts observed across all normals at each site.
+     * @param counts    total alt and ref counts observed across all normals at each site
+     */
     public AllelicPanelOfNormals(final AllelicCountCollection counts) {
         mleHyperparameterValues = calculateMLEHyperparameterValues(counts);
         mleMeanBias = meanBias(mleHyperparameterValues.alpha, mleHyperparameterValues.beta);
@@ -43,6 +48,11 @@ public final class AllelicPanelOfNormals {
         initializeSiteToHyperparameterPairMap(counts);
     }
 
+    /**
+     * Constructs an allelic panel of normals from a file that contains
+     * total alt and ref counts observed across all normals at each site.
+     * @param inputFile    contains total alt and ref counts observed across all normals at each site
+     */
     public AllelicPanelOfNormals(final File inputFile) {
         this(new AllelicCountCollection(validateFile(inputFile)));
     }
@@ -53,22 +63,45 @@ public final class AllelicPanelOfNormals {
         return inputFile;
     }
 
+    /**
+     * Gets the reference-bias alpha hyperparameter at a given SNP site if it is in the panel of normals
+     * and the MLE alpha hyperparameter across all sites if it is not.
+     * @param site  SNP site
+     * @return      reference-bias alpha hyperparameter if site is in panel of normals,
+     *              MLE alpha hyperparameter across all sites if it is not
+     */
     public double getAlpha(final SimpleInterval site) {
         throwExceptionIfPoNIsEmpty();
         Utils.nonNull(site);
         return siteToHyperparameterPairMap.getOrDefault(site, mleHyperparameterValues).alpha;
     }
 
+    /**
+     * Gets the reference-bias beta hyperparameter at a given SNP site if it is in the panel of normals
+     * and the MLE beta hyperparameter across all sites if it is not.
+     * @param site  SNP site
+     * @return      reference-bias beta hyperparameter if site is in panel of normals,
+     *              MLE beta hyperparameter across all sites if it is not
+     */
     public double getBeta(final SimpleInterval site) {
         throwExceptionIfPoNIsEmpty();
         Utils.nonNull(site);
         return siteToHyperparameterPairMap.getOrDefault(site, mleHyperparameterValues).beta;
     }
 
+    /**
+     * Gets the MLE mean-bias hyperparameter across all sites.
+     * @return  MLE mean-bias hyperparameter across all sites
+     */
     public double getMLEMeanBias() {
         throwExceptionIfPoNIsEmpty();
         return mleMeanBias;
     }
+
+    /**
+     * Gets the MLE bias-variance hyperparameter across all sites.
+     * @return  MLE bias-variance hyperparameter across all sites
+     */
     public double getMLEBiasVariance() {
         throwExceptionIfPoNIsEmpty();
         return mleBiasVariance;
@@ -83,6 +116,11 @@ public final class AllelicPanelOfNormals {
             this.beta = beta;
         }
 
+        /**
+         * Initializes the hyperparameter values at a site given the observed counts in all normals.
+         * @param a     total alt counts observed across all normals at site
+         * @param r     total ref counts observed across all normals at site
+         */
         private HyperparameterValues(final int a, final int r) {
             final double f = 0.5;
             final int n = a + r;
