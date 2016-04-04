@@ -32,7 +32,7 @@ public class VariantEvaluationContextBuilder extends VariantContextBuilder {
     @Override
     public VariantEvaluationContextBuilder alleles(final Collection<Allele> alleles) {
         ParamUtils.noNulls(alleles, "the input cannot contain null alleles");
-        validateAlleleStrings(alleles.stream().map(Allele::getBaseString).collect(Collectors.toList()));
+        validateAlleleStrings(alleles.stream().map(Allele::getDisplayString).collect(Collectors.toList()));
         if (!alleles.iterator().next().isReference()) {
             throw new IllegalArgumentException("the first allele must be a reference allele");
         }
@@ -44,7 +44,7 @@ public class VariantEvaluationContextBuilder extends VariantContextBuilder {
         ParamUtils.noNulls(allelesString, "the input cannot contain null strings");
         if (allelesString.isEmpty()) {
             throw new IllegalArgumentException("the allele list cannot be empty");
-        } if (!allelesString.get(0).equals(CNVAllele.REF.allele.getBaseString())) {
+        } if (!allelesString.get(0).equals(CNVAllele.REF.allele.getDisplayString())) {
             throw new IllegalArgumentException("the first allele must be the reference allele: " + CNVAllele.REF.allele);
         }
         final Set<CNVAllele> allelesFound = EnumSet.of(CNVAllele.REF);
@@ -54,7 +54,7 @@ public class VariantEvaluationContextBuilder extends VariantContextBuilder {
             try {
                 allele = CNVAllele.valueOf(Allele.create(alleleString, false));
             } catch(final IllegalArgumentException ex) {
-                throw new IllegalArgumentException("unknown allele with string: " + alleleString);
+                throw new IllegalArgumentException(String.format("unknown allele with string: '%s'", alleleString));
             }
             if (!allelesFound.add(allele)) {
                 throw new IllegalArgumentException("an allele cannot be listed twice.");
@@ -88,6 +88,7 @@ public class VariantEvaluationContextBuilder extends VariantContextBuilder {
     @Override
     public VariantEvaluationContextBuilder genotypes(final GenotypesContext genotypes) {
         super.genotypes(genotypes);
+        calculateAFs(genotypes);
         return this;
     }
 
@@ -125,7 +126,7 @@ public class VariantEvaluationContextBuilder extends VariantContextBuilder {
             final List<Allele> alleles = genotype.getAlleles();
             if (alleles.size() > 1) {
                 throw new GATKException("unexpected CNV genotype ploidy: " + alleles.size());
-            } else if (!alleles.isEmpty()) {
+            } else if (!alleles.isEmpty() && alleles.get(0).isCalled()) {
                 final int index = CNVAllele.valueOf(alleles.get(0)).ordinal();
                 callsAC[index]++;
             }

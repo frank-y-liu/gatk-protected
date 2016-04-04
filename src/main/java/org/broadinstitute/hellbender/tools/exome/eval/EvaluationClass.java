@@ -38,9 +38,14 @@ public enum EvaluationClass {
     DISCORDANT_POSITIVE("DP", "When truth overlaps with several calls that are concordant amongst them but the are discordant with the truth"),
 
     /**
-     * When a call does not overall with truth.
+     * When a call does not overlap with any truth call.
      */
-    UNKNOWN_POSITIVE("UP", "When a call does not overall with truth");
+    UNKNOWN_POSITIVE("UP", "When a call does not overlap with any truth call"),
+
+    /**
+     * When a call overlaps with a ref truth call.
+     */
+    FALSE_POSITIVE("FP", "When a call overlap with a ref truth call" );
 
     /**
      * The key for vcf header lines describing evaluation classes.

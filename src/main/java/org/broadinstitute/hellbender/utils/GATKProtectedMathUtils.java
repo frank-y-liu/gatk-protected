@@ -136,4 +136,21 @@ public class GATKProtectedMathUtils {
         Utils.nonNull(values);
         return Math.sqrt(new Variance().evaluate(values));
     }
+
+    public static int minIndex(final int ... values) {
+        Utils.nonNull(values);
+        if (values.length == 0) {
+            return -1;
+        }
+        int minValue = values[0];
+        int minIndex = 0;
+        for (int i = 0; i < values.length; i++) {
+            final int nextValue = values[i];
+            if (nextValue < minValue) {
+                minValue = nextValue;
+                minIndex = i;
+            }
+        }
+        return minIndex;
+    }
 }

@@ -1,6 +1,7 @@
 package org.broadinstitute.hellbender.tools.exome.eval;
 
 import htsjdk.variant.variantcontext.Genotype;
+import htsjdk.variant.variantcontext.GenotypeBuilder;
 import htsjdk.variant.variantcontext.VariantContext;
 import htsjdk.variant.vcf.VCFConstants;
 import org.broadinstitute.hellbender.exceptions.GATKException;
@@ -82,7 +83,7 @@ public class GATKProtectedVariantContextUtils {
             return StreamSupport.stream(((Iterable<?>)value).spliterator(), false)
                     .mapToDouble(doubleConverter).toArray();
         } else { // as a last resort with transform it into an String and try to parse an array out of it.
-            return Stream.of(String.valueOf(value).trim().replaceAll("\\[\\]", "")
+            return Stream.of(String.valueOf(value).trim().replaceAll("\\[|\\]", "")
                     .split(VCFConstants.INFO_FIELD_ARRAY_SEPARATOR))
                     .mapToDouble(doubleConverter).toArray();
         }
@@ -135,10 +136,43 @@ public class GATKProtectedVariantContextUtils {
                     .map(String::valueOf)
                     .map(s -> s.equals(VCFConstants.MISSING_VALUE_v4) ? missingValue : s).toArray(String[]::new);
         } else { // as a last resort with transform it into an String and try to parse an array out of it.
-            return Stream.of(String.valueOf(value).trim().replaceAll("\\[\\]", "")
+            return Stream.of(String.valueOf(value).trim().replaceAll("\\[|\\]", "")
                     .split(VCFConstants.INFO_FIELD_ARRAY_SEPARATOR))
                     .map(String::valueOf)
                     .map(s -> s.equals(VCFConstants.MISSING_VALUE_v4) ? missingValue : s).toArray(String[]::new);
+        }
+    }
+
+    /**
+     * Instead of using the GQ value, it re-calculates the quality from the PL so that it does not need
+     * to be bounded by an artificial maximum such as the standard GQ = 99.
+     * @param builder where to set the genotypes.
+     * @param genotype the PL source genotype.
+     *
+     * @return never {@code null}, but -1 if there is no PLs.
+     * @throws IllegalArgumentException if {@code genotype} is {@code null}
+     */
+    public static void setGenotypeQualityFromPLs(final GenotypeBuilder builder, final Genotype genotype) {
+        Utils.nonNull(genotype);
+        if (!genotype.hasPL()) {
+            builder.noGQ();
+        } else {
+            int[] PLs = genotype.getPL();
+            if (PLs.length <= 1) {
+                builder.noGQ();
+            } else {
+                int best = PLs[0], secondBest = Integer.MAX_VALUE;
+                for (int i = 1; i < PLs.length; i++) {
+                    final int next = PLs[i];
+                    if (next <= best) {
+                        secondBest = best;
+                        best = next;
+                    } else if (next < secondBest) {
+                        secondBest = next;
+                    }
+                }
+                builder.GQ(secondBest - best);
+            }
         }
     }
 }

@@ -30,7 +30,7 @@ public class VariantEvaluationContext extends VariantContext {
     public static final String CALLED_SEGMENTS_COUNT_KEY = "SC";
     public static final String CALLED_ALLELE_COUNTS_KEY = "CC";
     public static final String CALLED_SEGMENTS_LENGTH_KEY = "CL";
-    public static final String CALL_QUALITY_KEY = "GQ";
+    public static final String CALL_QUALITY_KEY = "CQ";
     public static final String TRUTH_SEGMENT_LENGTH_KEY = GenotypeCopyNumberTriStateSegments.NUMBER_OF_TARGETS_KEY;
     public static final String TRUTH_COPY_FRACTION_KEY = "TF";
     public static final String TRUTH_QUALITY_KEY = "TQ";
@@ -81,12 +81,12 @@ public class VariantEvaluationContext extends VariantContext {
         if (alternativeAllelesFrequencies.length != alleles.size() - 1) {
             throw new IllegalStateException(String.format("We expect the %s Info annotation to contain an array of %d elements (alt. allele count)", key, alleles.size() - 1));
         }
+        System.arraycopy(alternativeAllelesFrequencies, 0, result, 1, alternativeAllelesFrequencies.length);
         final double nonRefSum = MathUtils.sum(result);
-        if (nonRefSum > 1) {
+        if (nonRefSum > 1.) {
             throw new IllegalArgumentException(String.format("The sum of element on annotation %s cannot greater than 1.0: %g", key, nonRefSum));
         }
         result[0] = 1.0 - nonRefSum;
-        System.arraycopy(alternativeAllelesFrequencies, 0, result, 1, alternativeAllelesFrequencies.length);
         return result;
     }
 }

@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender.tools.exome.eval;
 
+import htsjdk.variant.vcf.VCFConstants;
 import org.broadinstitute.hellbender.utils.Utils;
 
 import java.util.EnumSet;
@@ -28,12 +29,14 @@ public enum EvaluationSegmentFilter {
      */
     CommonEvent("CE", "Common Event"),
 
-    MultiAllelicTruth("TruthMA", "Multi-allelic CNV");
+    MultiAllelicTruth("TruthMA", "Multi-allelic CNV Truth"),
+
+    MultiAllelicCalls("CallsMA", "Multi-allelic CNV Calls");
 
     /**
      * Represent an empty filter set, i.e. the segment pass all filters.
      */
-    public static final String PASS_ACRONYM = "PASS";
+    public static final String PASS_ACRONYM = VCFConstants.PASSES_FILTERS_v4;
 
     public final String acronym;
 

@@ -58,7 +58,9 @@ public enum CNVAllele {
      */
     public static CNVAllele valueOf(final Allele allele) {
         Utils.nonNull(allele, "the input allele cannot be null");
-        return Stream.of(values()).filter(v -> v.allele.equals(allele)).findFirst().orElseThrow(IllegalArgumentException::new);
+        return Stream.of(values()).filter(v -> v.allele.equals(allele))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(String.format("unknown allele '%s'", allele)));
     }
 
     /**

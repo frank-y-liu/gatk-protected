@@ -17,6 +17,7 @@ import org.broadinstitute.hellbender.utils.*;
 import org.broadinstitute.hellbender.utils.tsv.DataLine;
 import org.broadinstitute.hellbender.utils.tsv.TableColumnCollection;
 import org.broadinstitute.hellbender.utils.tsv.TableWriter;
+import scala.tools.reflect.Eval;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -59,7 +60,6 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
     public static final String FREQUENCY_SMOOTHING_FULL_NAME = "frequencySmoothing";
 
     public static final String DEFAULT_OVERALL_SUMMARY_SAMPLE_NAME = "ALL";
-    public static final double DEFAULT_FREQUENCY_SMOOTHING = 1.0;
 
     @ArgumentCollection
     protected TargetArgumentCollection targetArguments = new TargetArgumentCollection();
@@ -143,20 +143,14 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
     )
     protected int truthNeutralCopyNumber = ConvertGSVariantsToSegments.NEUTRAL_COPY_NUMBER_DEFAULT;
 
-    @Argument(
-            doc = "Frequency smoothing constant",
-            shortName = FREQUENCY_SMOOTHING_SHORT_NAME,
-            fullName = FREQUENCY_SMOOTHING_FULL_NAME,
-            optional = true
-    )
-    protected double frequencySmoothing = DEFAULT_FREQUENCY_SMOOTHING;
-
     @Override
     protected Object doWork() {
         final TargetCollection<Target> targets = targetArguments.readTargetCollection(false);
         final VCFFileReader truthReader = openVCFReader(truthFile);
         final VCFFileReader callsReader = openVCFReader(callsFile);
-        final Set<String> samples = this.samples.isEmpty() ? composeSetOfSamplesToEvaluate(callsReader) : this.samples;
+        if (samples.isEmpty()) {
+            samples = composeSetOfSamplesToEvaluate(callsReader);
+        }
         final VariantContextWriter outputWriter = openVCFWriter(outputFile, samples);
         final Map<String, EvaluationSampleSummaryRecord> sampleStats = samples.stream()
                 .collect(Collectors.toMap(s -> s, EvaluationSampleSummaryRecord::new));
@@ -195,10 +189,10 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
             return;
         }
         for (final Genotype genotype : vc.getGenotypes()) {
-            final String[] filters = GATKProtectedVariantContextUtils.getAttributeAsStringArray(genotype, VCFConstants.GENOTYPE_FILTER_KEY, () -> new String[] {VCFConstants.PASSES_FILTERS_v4}, "");
+            final String[] filters = GATKProtectedVariantContextUtils.getAttributeAsStringArray(genotype, VCFConstants.GENOTYPE_FILTER_KEY, () -> new String[] {VCFConstants.PASSES_FILTERS_v4}, VCFConstants.PASSES_FILTERS_v4);
             // ignore filtered genotypes.
             if (Stream.of(filters)
-                    .anyMatch(s -> !s.isEmpty() && !s.equals(VCFConstants.PASSES_FILTERS_v3))) {
+                    .anyMatch(s -> !s.equals(VCFConstants.PASSES_FILTERS_v4))) {
                 continue;
             }
             final String sample = genotype.getSampleName();
@@ -213,6 +207,7 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
     private VariantContextWriter openVCFWriter(final File outputFile, final Set<String> samples) {
         final VariantContextWriterBuilder builder = new VariantContextWriterBuilder();
         builder.setOutputFile(outputFile);
+        builder.clearOptions();
         final VariantContextWriter result = builder.build();
         final VCFHeader header = new VCFHeader(Collections.emptySet(), samples);
         CNVAllele.addHeaderLinesTo(header);
@@ -228,7 +223,8 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
         header.addMetaDataLine(new VCFFormatHeaderLine(VariantEvaluationContext.EVALUATION_CLASS_KEY, 1, VCFHeaderLineType.Character, "The evaluation class for the call or lack of call. It the values of the header key '" + EvaluationClass.VCF_HEADER_KEY + "'"));
         header.addMetaDataLine(new VCFFormatHeaderLine(VariantEvaluationContext.TRUTH_GENOTYPE_KEY, 1, VCFHeaderLineType.Character, "The truth genotype"));
         header.addMetaDataLine(new VCFFormatHeaderLine(VariantEvaluationContext.CALLED_SEGMENTS_LENGTH_KEY, 1, VCFHeaderLineType.Integer, "Number of targets covered by called segments"));
-        header.addMetaDataLine(new VCFFormatHeaderLine(VariantEvaluationContext.CALL_QUALITY_KEY, 1, VCFHeaderLineType.Float, "The quality of the call (the maximum if ther are more than one segment"));
+        header.addMetaDataLine(new VCFFormatHeaderLine(VariantEvaluationContext.CALL_QUALITY_KEY, 1, VCFHeaderLineType.Float, "1 - The probability of th event in Phred scale (the maximum if ther are more than one segment"));
+        header.addMetaDataLine(new VCFFormatHeaderLine(VCFConstants.GENOTYPE_QUALITY_KEY, 1, VCFHeaderLineType.Integer, "The quality of the call (the maximum if there are more than one segment"));
 
         // Info annotations.
         header.addMetaDataLine(new VCFInfoHeaderLine(VariantEvaluationContext.TRUTH_ALLELE_FREQUENCY_KEY, VCFHeaderLineCount.A, VCFHeaderLineType.Float, "The frequency of the alternative alleles in the truth callset"));
@@ -236,12 +232,14 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
         header.addMetaDataLine(new VCFInfoHeaderLine(VariantEvaluationContext.CALLS_ALLELE_FREQUENCY_KEY, VCFHeaderLineCount.A, VCFHeaderLineType.Float, "The frequency of the alternative alleles in the actual callset"));
         header.addMetaDataLine(new VCFInfoHeaderLine(VariantEvaluationContext.CALLS_ALLELE_NUMBER_KEY, 1, VCFHeaderLineType.Integer, "Total number of called alleles in the actual callset"));
         header.addMetaDataLine(new VCFInfoHeaderLine(VariantEvaluationContext.TRUTH_SEGMENT_LENGTH_KEY, 1, VCFHeaderLineType.Integer, "Number of targets overlapped by this variant"));
+        header.addMetaDataLine(new VCFInfoHeaderLine(VCFConstants.END_KEY, 1, VCFHeaderLineType.Integer, "Stop position for the variant"));
 
         // Filter annotations.
         for (final EvaluationSegmentFilter filter : EvaluationSegmentFilter.values()) {
             header.addMetaDataLine(new VCFFilterHeaderLine(filter.name(), filter.description));
             header.addMetaDataLine(new VCFFilterHeaderLine(filter.acronym, filter.description));
         }
+        header.addMetaDataLine(new VCFFilterHeaderLine(EvaluationSegmentFilter.PASS_ACRONYM, "Indicates that it passes all filters"));
         result.writeHeader(header);
         return result;
     }
@@ -259,17 +257,21 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
         final List<VariantContext> callsVariants = variantQueryToList(callsReader, interval);
         final List<VariantEvaluationContext> evaluatedVariants = new ArrayList<>(truthVariants.size() + callsVariants.size());
         for (final VariantContext truth : truthVariants) {
+            // skip truth that does not overlap a single target.
+            if (targets.targetCount(truth) == 0) {
+                continue;
+            }
             final List<VariantContext> overlappingCalls = callsVariants.stream()
                     .filter(vc -> IntervalUtils.overlaps(truth, vc))
                     .collect(Collectors.toList());
             evaluatedVariants.add(composeTruePositive(truth, overlappingCalls, targets));
         }
         for (final VariantContext call : callsVariants) {
-            final List<VariantContext> overlappingTruth = callsVariants.stream()
+            final List<VariantContext> overlappingTruth = truthVariants.stream()
                     .filter(vc -> IntervalUtils.overlaps(call, vc))
                     .collect(Collectors.toList());
             if (overlappingTruth.isEmpty()) {
-                evaluatedVariants.add(composeUnknownPositiveVariantContext(call)) ;
+                evaluatedVariants.add(composeUnknownPositiveVariantContext(call, targets)) ;
             }
         }
         return evaluatedVariants.stream()
@@ -280,7 +282,7 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
 
     private VariantEvaluationContext applyVariantFilters(final VariantEvaluationContext vec) {
         final Set<EvaluationSegmentFilter> filters = new LinkedHashSet<>();
-        if (filterArguments.maximumTruthEventFrequency > 1.0 - vec.getTruthAlleleFrequency(CNVAllele.REF)) {
+        if (filterArguments.maximumTruthEventFrequency < 1.0 - vec.getTruthAlleleFrequency(CNVAllele.REF)) {
             filters.add(EvaluationSegmentFilter.CommonEvent);
         }
         if (filterArguments.minimumTruthSegmentLength > vec.getTargetCount()) {
@@ -290,6 +292,10 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
                 vec.getTruthAlleleFrequency(CNVAllele.DUP) > 0) {
             filters.add(EvaluationSegmentFilter.MultiAllelicTruth);
         }
+        if (filterArguments.applyMultiAllelicCalledFilter && vec.getCallsAlleleFrequency(CNVAllele.DEL) > 0 &&
+                vec.getCallsAlleleFrequency(CNVAllele.DUP) > 0) {
+            filters.add(EvaluationSegmentFilter.MultiAllelicCalls);
+        }
         final Set<String> filterStrings = filters.isEmpty() ? Collections.singleton(EvaluationSegmentFilter.PASS_ACRONYM) :
                 filters.stream().map(Enum<EvaluationSegmentFilter>::name).collect(Collectors.toSet());
 
@@ -298,34 +304,54 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
         return builder.make();
     }
 
-    private VariantEvaluationContext composeUnknownPositiveVariantContext(final VariantContext call) {
+    private VariantEvaluationContext composeUnknownPositiveVariantContext(final VariantContext call, final TargetCollection<Target> targets) {
         final VariantEvaluationContextBuilder result = new VariantEvaluationContextBuilder();
         result.loc(call.getContig(), call.getStart(), call.getEnd());
+        result.attribute(VCFConstants.END_KEY, call.getEnd());
         result.id(call.getID());
         result.alleles(call.getAlleles());
         result.genotypes(
                 call.getGenotypes().stream()
-                .map(this::markDiscoveredGenotypesAsUnknownPositive)
+                .map(g -> markDiscoveredGenotypesAsUnknownPositive(call, g))
                 .collect(Collectors.toList()));
+        result.attribute(GenotypeCopyNumberTriStateSegments.NUMBER_OF_TARGETS_KEY, targets.targetCount(call));
         return result.make();
     }
 
-    private Genotype markDiscoveredGenotypesAsUnknownPositive(final Genotype g) {
-        if (!GenotypeCopyNumberTriStateSegments.DISCOVERY_TRUE.equals(g.getExtendedAttribute(GenotypeCopyNumberTriStateSegments.DISCOVERY_KEY))) {
-                return g;
-        } else {
-                return new GenotypeBuilder(g).attribute(VariantEvaluationContext.EVALUATION_CLASS_KEY, EvaluationClass.UNKNOWN_POSITIVE).make();
-        }
+    private Genotype markDiscoveredGenotypesAsUnknownPositive(final VariantContext enclosingContext, final Genotype g) {
+            final GenotypeBuilder builder = new GenotypeBuilder(g.getSampleName());
+            GATKProtectedVariantContextUtils.setGenotypeQualityFromPLs(builder, g);
+            final int[] PL = g.getPL();
+            final int callAlleleIndex = GATKProtectedMathUtils.minIndex(PL);
+            final double[] altSQ = GATKProtectedVariantContextUtils.getAttributeAsDoubleArray(g, GenotypeCopyNumberTriStateSegments.SOME_QUALITY_KEY,
+                    () -> new double[enclosingContext.getAlleles().size() - 1], 0.0);
+            final int alterantiveAlleleIndex = MathUtils.maxElementIndex(altSQ);
+            final double quality = callAlleleIndex == 0 ? 0 : altSQ[alterantiveAlleleIndex];
+            builder.alleles(Collections.singletonList(enclosingContext.getAlleles().get(callAlleleIndex)));
+            builder.attribute(VariantEvaluationContext.CALL_QUALITY_KEY, quality);
+            final boolean discovered = GenotypeCopyNumberTriStateSegments.DISCOVERY_TRUE.equals(GATKProtectedVariantContextUtils.getAttributeAsString(g, GenotypeCopyNumberTriStateSegments.DISCOVERY_KEY, GenotypeCopyNumberTriStateSegments.DISCOVERY_FALSE));
+            if (callAlleleIndex != 0 && discovered) {
+                builder.attribute(VariantEvaluationContext.EVALUATION_CLASS_KEY, EvaluationClass.UNKNOWN_POSITIVE.acronym);
+            }
+            if (quality < filterArguments.minimumCalledSegmentQuality) {
+                builder.filter(EvaluationSegmentFilter.LowQuality.acronym);
+            } else {
+                builder.filter(EvaluationSegmentFilter.PASS_ACRONYM);
+            }
+            final Genotype result = builder.make();
+            return result;
     }
 
     private VariantEvaluationContext composeTruePositive(final VariantContext truth, final List<VariantContext> calls, final TargetCollection<Target> targets) {
         final VariantEvaluationContextBuilder builder = new VariantEvaluationContextBuilder();
         builder.loc(truth.getContig(), truth.getStart(), truth.getEnd());
+        builder.attribute(VCFConstants.END_KEY, truth.getEnd());
         builder.id(truth.getID());
         builder.alleles(CNVAllele.ALL_ALLELES);
         builder.genotypes(samples.stream()
                 .map(s -> composeTruePositiveGenotype(s, truth, calls, targets))
                 .collect(Collectors.toList()));
+        builder.attribute(GenotypeCopyNumberTriStateSegments.NUMBER_OF_TARGETS_KEY, targets.targetCount(truth));
         return builder.make();
     }
 
@@ -356,9 +382,9 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
                         final double[] altSQs = GATKProtectedVariantContextUtils.getAttributeAsDoubleArray(pair.getRight(),
                                 GenotypeCopyNumberTriStateSegments.SOME_QUALITY_KEY,
                                 () -> new double[pair.getLeft().getAlleles().size() - 1], 0.0);
-                        final Allele callAllele = pair.getLeft().getAlleles().get(0);
+                        final Allele callAllele = pair.getRight().getAlleles().get(0);
                         final int callSQIndex = pair.getLeft().getAlleles().indexOf(callAllele) - 1;
-                        final double callSQ =  altSQs[callSQIndex];
+                        final double callSQ = altSQs[callSQIndex];
                         return callSQ >= filterArguments.minimumCalledSegmentQuality;
                 })
                 // Filter vc/gt with small segments (small number of targets)
@@ -386,7 +412,7 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
                 .collect(Collectors.toSet());
 
         final Allele calledAllele = calledAlleles.size() == 1 ? calledAlleles.iterator().next().allele : Allele.NO_CALL;
-        final GenotypeBuilder builder = new GenotypeBuilder();
+        final GenotypeBuilder builder = new GenotypeBuilder(sample);
         builder.alleles(Collections.singletonList(calledAllele));
         builder.attribute(VariantEvaluationContext.TRUTH_GENOTYPE_KEY, CNVAllele.ALL_ALLELES.indexOf(truthAllele.allele));
         builder.attribute(VariantEvaluationContext.CALLED_SEGMENTS_COUNT_KEY, sampleQualifyingCalls.size());
@@ -406,10 +432,8 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
                 sampleQualifyingCalls.stream().mapToDouble(pair ->
                     GATKProtectedVariantContextUtils.getAttributeAsDoubleArray(pair.getRight(), GenotypeCopyNumberTriStateSegments.SOME_QUALITY_KEY,
                             () -> new double[pair.getRight().getAlleles().size()], 0.0)[
-                    pair.getLeft().getAlleles().indexOf(pair.getRight().getAllele(0))]).max());
+                    pair.getLeft().getAlleles().indexOf(pair.getRight().getAllele(0)) - 1]).max().orElse(0.0));
 
-        builder.attribute(VariantEvaluationContext.TRUTH_SEGMENT_LENGTH_KEY,
-                targets.targetCount(truth));
         builder.attribute(VariantEvaluationContext.TRUTH_COPY_FRACTION_KEY,
                 truthGenotype.getExtendedAttribute(ConvertGSVariantsToSegments.GS_COPY_NUMBER_FRACTION));
 
@@ -425,16 +449,16 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
             builder.filter(EvaluationSegmentFilter.PASS_ACRONYM);
         }
 
-        final EvaluationClass evaluationClass;
-        if (calledAllele.equals(Allele.NO_CALL)) {
-            if (calledAlleles.size() > 1 && calledAlleles.contains(truthAllele)) {
-                evaluationClass = EvaluationClass.MIXED_POSITIVE;
-            } else if (calledAlleles.isEmpty()) {
+        if (!calledAlleles.isEmpty() || truthAllele != CNVAllele.REF) {
+            final EvaluationClass evaluationClass;
+            if (calledAlleles.isEmpty()) {
                 evaluationClass = EvaluationClass.FALSE_NEGATIVE;
-            } else if (calledAlleles.contains(truthAllele)) {
-                evaluationClass = EvaluationClass.TRUE_POSITIVE;
-            } else  {
-                evaluationClass = EvaluationClass.DISCORDANT_POSITIVE;
+            } else if (calledAlleles.size() == 1) {
+                evaluationClass = calledAlleles.contains(truthAllele) ? EvaluationClass.TRUE_POSITIVE :
+                                  truthAllele == CNVAllele.REF ? EvaluationClass.FALSE_POSITIVE :
+                                  /* else */ EvaluationClass.DISCORDANT_POSITIVE;
+            } else {
+                evaluationClass = truthAllele == CNVAllele.REF ? EvaluationClass.FALSE_POSITIVE : EvaluationClass.MIXED_POSITIVE;
             }
             builder.attribute(VariantEvaluationContext.EVALUATION_CLASS_KEY, evaluationClass.acronym);
         }
@@ -491,21 +515,20 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
             final boolean overlaps = overlappingBuffer.getFirst().overlaps(overlappingBuffer.getLast());
             if (overlaps) {
                 final SimpleInterval merged = IntervalUtils.getSpanningInterval(overlappingBuffer);
-                overlappingBuffer.remove();
+                overlappingBuffer.clear();
                 overlappingBuffer.add(merged);
             } else {
-                result.add(overlappingBuffer.pop());
-                overlappingBuffer.add(interval);
+                result.add(overlappingBuffer.removeFirst());
             }
         }
-        // Add the contents of the buffer.
+        // Add the remaining contents of the buffer.
         result.addAll(overlappingBuffer);
         return result;
     }
 
     private VCFFileReader openVCFReader(final File file) {
         try {
-            return new VCFFileReader(file);
+            return new VCFFileReader(file, true);
         } catch (final Exception ex) {
             throw new UserException.CouldNotReadInputFile(file, ex.getMessage(), ex);
         }
@@ -514,7 +537,7 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
     private void writeOverallSummaryRecordIfApplies(final EvaluationSampleSummaryWriter sampleSummaryOutputWriter) {
         if (includeOverallSummaryRecord) {
             if (sampleSummaryOutputWriter == null) {
-                logger.warn("The overall sample summary record has been requested but the sample summary output file was not provided");
+                logger.warn("The overall sample summary record has been requested but a sample summary output file was not provided");
             } else {
                 try {
                     sampleSummaryOutputWriter.writeOverallRecord();
@@ -597,6 +620,7 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
 
         public void increase(final EvaluationClass evalClass) {
             countsByClass.put(evalClass, countsByClass.getInt(evalClass) + 1);
+            total++;
         }
 
         public void add(final EvaluationSampleSummaryRecord record) {
@@ -605,6 +629,7 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
                 countsByClass.put(evalClass,
                         countsByClass.get(evalClass) + record.countsByClass.get(evalClass));
             }
+            total += record.total;
         }
     }
 
@@ -644,10 +669,11 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
             for (final EvaluationClass evalClass : EvaluationClass.values()) {
                 dataLine.append(record.countsByClass.getInt(evalClass));
             }
+            dataLine.append(record.total);
         }
 
         protected void writeOverallRecord() throws IOException {
-            writeRecord(overallRecord);
+            super.writeRecord(overallRecord);
         }
     }
 
