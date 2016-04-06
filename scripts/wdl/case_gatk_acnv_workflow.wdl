@@ -32,7 +32,7 @@ workflow case_gatk_acnv_workflow {
         mem=1
   }
 
-  call CalculateTargetCoverage {
+  call CalculateTargetCoverage as TumorCalculateTargetCoverage {
     input:
         entity_id=wf_entity_id_tumor,
         padded_target_bed=PadTargets.padded_target_bed,
@@ -46,30 +46,71 @@ workflow case_gatk_acnv_workflow {
 
   }
 
-  call NormalizeSomaticReadCounts {
+  call NormalizeSomaticReadCounts as TumorNormalizeSomaticReadCounts {
     input:
         entity_id=wf_entity_id_tumor,
-        coverage_file=CalculateTargetCoverage.gatk_cnv_coverage_file,
+        coverage_file=TumorCalculateTargetCoverage.gatk_cnv_coverage_file,
         padded_target_bed=PadTargets.padded_target_bed,
         pon=PoN,
         jar_file=jar_file,
         mem=2
   }
 
-  call PerformSegmentation {
+  call PerformSegmentation as TumorPerformSeg{
     input:
         entity_id=wf_entity_id_tumor,
         jar_file=jar_file,
-        tn_file=NormalizeSomaticReadCounts.tn_file,
+        tn_file=TumorNormalizeSomaticReadCounts.tn_file,
         mem=2
   }
 
-  call Caller {
+  call Caller as TumorCaller {
     input:
         entity_id=wf_entity_id_tumor,
         jar_file=jar_file,
-        tn_file=NormalizeSomaticReadCounts.tn_file,
-        seg_file=PerformSegmentation.seg_file,
+        tn_file=TumorNormalizeSomaticReadCounts.tn_file,
+        seg_file=TumorPerformSeg.seg_file,
+        mem=2
+  }
+
+  call CalculateTargetCoverage as NormalCalculateTargetCoverage {
+    input:
+        entity_id=wf_entity_id_normal,
+        padded_target_bed=PadTargets.padded_target_bed,
+        input_bam=tumor_bam,
+        ref_fasta=ref_fasta,
+        ref_fasta_fai=ref_fasta_fai,
+        ref_fasta_dict=ref_fasta_dict,
+        jar_file=jar_file,
+        disable_reference_validation=is_disable_reference_validation,
+        mem=2
+
+  }
+
+  call NormalizeSomaticReadCounts as NormalNormalizeSomaticReadCounts {
+    input:
+        entity_id=wf_entity_id_normal,
+        coverage_file=NormalCalculateTargetCoverage.gatk_cnv_coverage_file,
+        padded_target_bed=PadTargets.padded_target_bed,
+        pon=PoN,
+        jar_file=jar_file,
+        mem=2
+  }
+
+  call PerformSegmentation as NormalPerformSeg {
+    input:
+        entity_id=wf_entity_id_normal,
+        jar_file=jar_file,
+        tn_file=NormalNormalizeSomaticReadCounts.tn_file,
+        mem=2
+  }
+
+  call Caller as NormalCaller {
+    input:
+        entity_id=wf_entity_id_normal,
+        jar_file=jar_file,
+        tn_file=NormalNormalizeSomaticReadCounts.tn_file,
+        seg_file=NormalPerformSeg.seg_file,
         mem=2
   }
 
@@ -95,8 +136,8 @@ workflow case_gatk_acnv_workflow {
         jar_file=jar_file,
         mem = 4,
         tumor_hets=HetPulldown.tumor_hets,
-        called_file=Caller.called_file,
-        tn_file=NormalizeSomaticReadCounts.tn_file
+        called_file=TumorCaller.called_file,
+        tn_file=TumorNormalizeSomaticReadCounts.tn_file
   }
 }
 
