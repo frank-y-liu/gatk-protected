@@ -28,7 +28,8 @@ workflow case_gatk_acnv_workflow {
   call PadTargets {
     input:
         target_bed=target_bed,
-        jar_file=jar_file
+        jar_file=jar_file,
+        mem=1
   }
 
   call CalculateTargetCoverage {
@@ -40,7 +41,9 @@ workflow case_gatk_acnv_workflow {
         ref_fasta_fai=ref_fasta_fai,
         ref_fasta_dict=ref_fasta_dict,
         jar_file=jar_file,
-        disable_reference_validation=is_disable_reference_validation
+        disable_reference_validation=is_disable_reference_validation,
+        mem=2
+
   }
 
   call NormalizeSomaticReadCounts {
@@ -49,7 +52,8 @@ workflow case_gatk_acnv_workflow {
         coverage_file=CalculateTargetCoverage.gatk_cnv_coverage_file,
         padded_target_bed=PadTargets.padded_target_bed,
         pon=PoN,
-        jar_file=jar_file
+        jar_file=jar_file,
+        mem=2
   }
 
   call PerformSegmentation {
@@ -101,7 +105,7 @@ workflow case_gatk_acnv_workflow {
 task PadTargets {
     File target_bed
     Int pd = 250
-    Int mem = 1
+    Int mem
     File jar_file
     command {
         java -Xmx${mem}g -Djava.library.path=/usr/lib/jni/ -jar ${jar_file} PadTargets  --targets ${target_bed} --output targets.padded.bed --padding ${pd}  --help false --version false --verbosity INFO --QUIET false
@@ -126,9 +130,9 @@ task CalculateTargetCoverage {
     File ref_fasta
     File ref_fasta_fai
     File ref_fasta_dict
-    Int mem = 4
+    Int mem
     File jar_file
-    String disable_reference_validation = "false"
+    String disable_reference_validation
 
     command {
         java -Xmx${mem}g -Djava.library.path=/usr/lib/jni/ -jar ${jar_file} CalculateTargetCoverage --output ${entity_id}.coverage.tsv --groupBy ${grouping} --transform ${transform} --targets ${padded_target_bed} --targetInformationColumns FULL --keepduplicatereads ${keepduplicatereads} --input ${input_bam} --reference ${ref_fasta}  --disable_all_read_filters ${disable_all_read_filters} --interval_set_rule UNION --interval_padding 0 --secondsBetweenProgressUpdates 10.0 --disableSequenceDictionaryValidation ${disable_reference_validation} --createOutputBamIndex true --help false --version false --verbosity INFO --QUIET false
@@ -147,7 +151,7 @@ task NormalizeSomaticReadCounts {
     File coverage_file
     File padded_target_bed
     File pon
-    Int mem = 2
+    Int mem
     File jar_file
     command {
         java -Xmx${mem}g -Djava.library.path=/usr/lib/jni/ -jar ${jar_file} NormalizeSomaticReadCounts  --input ${coverage_file} \
@@ -166,7 +170,7 @@ task NormalizeSomaticReadCounts {
 }
 
 task PerformSegmentation {
-    Int mem = 2
+    Int mem
     String entity_id
     File jar_file
     File tn_file
@@ -184,7 +188,7 @@ task PerformSegmentation {
 }
 
 task Caller {
-    Int mem = 2
+    Int mem
     String entity_id
     File jar_file
     File tn_file
@@ -206,7 +210,7 @@ task HetPulldown {
     String entity_id_tumor
     String entity_id_normal
     File jar_file
-    Int mem = 2
+    Int mem
     File ref_fasta
     File ref_fasta_fai
     File ref_fasta_dict
@@ -232,7 +236,7 @@ task HetPulldown {
 task AllelicCNV {
     String entity_id
     File jar_file
-    Int mem = 2
+    Int mem
     File tumor_hets
     File called_file
     File tn_file
