@@ -5,6 +5,7 @@ import org.broadinstitute.hellbender.utils.Utils;
 
 import java.util.EnumSet;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -96,4 +97,7 @@ public enum EvaluationSegmentFilter {
 
     }
 
+    public static EvaluationSegmentFilter fromString(final String str) {
+        return Stream.of(values()).filter(f -> f.name().equals(str) || f.acronym.equals(str)).findFirst().orElse(null);
+    }
 }

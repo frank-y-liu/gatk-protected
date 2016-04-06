@@ -18,6 +18,8 @@ public class VariantEvaluationContextBuilder extends VariantContextBuilder {
 
     private int[] truthAC = new int[CNVAllele.values().length];
     private int[] callsAC = new int[CNVAllele.values().length];
+    private VariantContext truth;
+    private List<VariantContext> calls;
 
     public VariantEvaluationContextBuilder() {
         super();
@@ -27,6 +29,10 @@ public class VariantEvaluationContextBuilder extends VariantContextBuilder {
         super(init);
         alleles(init.getAlleles());
         genotypes(init.getGenotypes());
+        if (init instanceof VariantEvaluationContext) {
+            final VariantEvaluationContext casted = (VariantEvaluationContext) init;
+            evidence(casted.getTruthVariantContext(), casted.getCallsVariantContexts());
+        }
     }
 
     @Override
@@ -164,11 +170,18 @@ public class VariantEvaluationContextBuilder extends VariantContextBuilder {
                     .mapToDouble(i -> truthAC[alleleToCNVAlleleOrdinal[i]] / (double) truthAN).toArray();
             attribute(VariantEvaluationContext.TRUTH_ALLELE_FREQUENCY_KEY, truthAF);
         }
-        return new VariantEvaluationContext(super.make(leaveItModifiable));
+        final VariantEvaluationContext context = new VariantEvaluationContext(super.make(leaveItModifiable));
+        context.setEvidence(truth, calls);
+        return context;
     }
 
     @Override
     public VariantEvaluationContext make() {
         return make(false);
+    }
+
+    public void evidence(final VariantContext truth, final List<VariantContext> calls) {
+        this.truth = truth;
+        this.calls = calls;
     }
 }

@@ -54,7 +54,7 @@ import java.util.function.Predicate;
  *
  * @author Valentin Ruano-Rubio &lt;valentin@broadinstitute.org&gt;
  */
-public class CallFiltersCollection {
+public class EvaluationFiltersArgumentCollection {
 
     public static final String MINIMUM_TRUTH_SEGMENT_LENGTH_SHORT_NAME = "minTruthLen";
     public static final String MINIMUM_TRUTH_SEGMENT_LENGTH_FULL_NAME = "minimumTruthSegmentLength";
@@ -199,55 +199,4 @@ public class CallFiltersCollection {
          */
         CommonTruthVariant,
     }
-
-    public interface CallFilterPredicate extends Predicate<EvaluationSiteRecord> {
-
-        Filter getFilter();
-
-        @Override
-        boolean test(final EvaluationSiteRecord evaluationSiteRecord);
-    }
-
-    private class CommonTruthVariant implements CallFilterPredicate {
-
-        @Override
-        public Filter getFilter() {
-            return Filter.CommonCalledVariant;
-        }
-
-        @Override
-        public boolean test(final EvaluationSiteRecord evaluationSiteRecord) {
-            return maximumCalledEventFrequency >= evaluationSiteRecord.deletionFrequency +
-                    evaluationSiteRecord.duplicationFrequency;
-        }
-    }
-
-    private class MultiAllelicTruth implements CallFilterPredicate {
-
-        @Override
-        public Filter getFilter() {
-            return Filter.MultiAllelicTruth;
-        }
-
-        @Override
-        public boolean test(final EvaluationSiteRecord evaluationSiteRecord) {
-            return evaluationSiteRecord.deletionFrequency <= 0 || evaluationSiteRecord.duplicationFrequency <= 0;
-        }
-    }
-
-    private class LowTrueSegmentQuality implements  CallFilterPredicate {
-
-        @Override
-        public Filter getFilter() {
-            return Filter.LowTrueSegmentQuality;
-        }
-
-        @Override
-        public boolean test(final EvaluationSiteRecord evaluationSiteRecord) {
-            return minimumCalledSegmentQuality <= evaluationSiteRecord.truthQuality();
-        }
-    }
-
-
-
 }

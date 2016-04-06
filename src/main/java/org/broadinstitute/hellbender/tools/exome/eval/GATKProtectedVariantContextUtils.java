@@ -10,6 +10,7 @@ import org.broadinstitute.hellbender.utils.param.ParamUtils;
 
 import java.lang.reflect.Array;
 import java.util.Arrays;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.ToDoubleFunction;
 import java.util.stream.Stream;
@@ -173,6 +174,27 @@ public class GATKProtectedVariantContextUtils {
                 }
                 builder.GQ(secondBest - best);
             }
+        }
+    }
+
+    /**
+     * Gets an attribute value by transforming the string its string representation using an translation function.
+     * @param g the source genotype.
+     * @param key the attribute key.
+     * @param translate the function to translate from an string to the return class of interest.
+     * @param defaultValue the default value to return in case the attribute is not defined or is declared as missing.
+     * @param <T> the return object type.
+     * @return {@code null} or an instance of the class {@link T}
+     */
+    public static <T> T getAttributeAsObject(final Genotype g, final String key, final Function<String, T> translate,
+                                                                              final T defaultValue) {
+        Utils.nonNull(g);
+        Utils.nonNull(key);
+        final Object value = g.getExtendedAttribute(key);
+        if (value == null || VCFConstants.MISSING_VALUE_v4.equals(value)) {
+            return defaultValue;
+        } else {
+            return translate.apply(String.valueOf(value));
         }
     }
 }

@@ -98,4 +98,12 @@ public enum EvaluationClass {
     public static EvaluationClass fromAcronym(final String acronym) {
         return VALUE_BY_ACRONYM.get(acronym);
     }
+
+    public static EvaluationClass fromString(final String string) {
+        if (VALUE_BY_ACRONYM.containsKey(string)) {
+            return VALUE_BY_ACRONYM.get(string);
+        } else {
+            return valueOf(string);
+        }
+    }
 }

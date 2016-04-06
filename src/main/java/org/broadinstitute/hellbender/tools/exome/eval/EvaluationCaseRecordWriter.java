@@ -2,6 +2,9 @@ package org.broadinstitute.hellbender.tools.exome.eval;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.broadinstitute.hellbender.tools.exome.CopyNumberTriStateSegment;
+import org.broadinstitute.hellbender.tools.exome.Target;
+import org.broadinstitute.hellbender.tools.exome.TargetCollection;
+import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.hmm.CopyNumberTriState;
 import org.broadinstitute.hellbender.utils.tsv.DataLine;
 import org.broadinstitute.hellbender.utils.tsv.TableColumnCollection;
@@ -19,7 +22,7 @@ import java.util.stream.Stream;
  *
  * @author Valentin Ruano-Rubio &lt;valentin@broadinstitute.org&gt;
  */
-class EvaluationSiteRecordWriter extends TableWriter<EvaluationSiteRecord> {
+class EvaluationCaseRecordWriter extends TableWriter<EvaluationSiteRecord> {
 
     private static final String SAMPLE_NAME_COLUMN = "SAMPLE";
     private static final String EVALUATION_CLASS_COLUMN = "CLASS";
@@ -27,29 +30,30 @@ class EvaluationSiteRecordWriter extends TableWriter<EvaluationSiteRecord> {
     private static final String START_COLUMN = "START";
     private static final String END_COLUMN = "END";
     private static final String TARGET_COUNT_COLUMN = "NTARGETS";
+    private static final String FILTER_COLUMN = "FILTER";
     private static final String TRUTH_COLUMN = "TRUTH";
     private static final String CALL_COLUMN = "CALL";
-    private static final String DELETION_FREQUENCY = "DELETION_FREQUENCY";
-    private static final String DUPLICATION_FREQUENCY = "DUPLICATION_FREQUENCY";
+    private static final String OUTCOME_COLUMN = "RESULT";
+
 
     private static final TableColumnCollection COLUMNS = new TableColumnCollection(
-            SAMPLE_NAME_COLUMN,
-            EVALUATION_CLASS_COLUMN,
             CONTIG_COLUMN,
             START_COLUMN,
             END_COLUMN,
             TARGET_COUNT_COLUMN,
+            SAMPLE_NAME_COLUMN,
+            EVALUATION_CLASS_COLUMN,
+            FILTER_COLUMN,
+            OUTCOME_COLUMN,
             TRUTH_COLUMN,
-            CALL_COLUMN,
-            DELETION_FREQUENCY,
-            DUPLICATION_FREQUENCY
+            CALL_COLUMN
     );
 
     private static final String SEGMENT_SEPARATOR = ";";
     private static final String ATTRIBUTE_SEPARATOR = ":";
-    private static final String NO_SEGMENT_STRING = ".";
+    private static final String NO_VALUE = ".";
 
-    public EvaluationSiteRecordWriter(final File file) throws IOException {
+    public EvaluationCaseRecordWriter(final File file) throws IOException {
         super(file, COLUMNS);
         writeComment("Possible classes in the CLASS column: ");
         for (final EvaluationClass clazz : EvaluationClass.values()) {
@@ -65,30 +69,17 @@ class EvaluationSiteRecordWriter extends TableWriter<EvaluationSiteRecord> {
     @Override
     protected void composeLine(final EvaluationSiteRecord record,
                                final DataLine dataLine) {
-        dataLine.append(record.sample)
-                .append(record.evaluationClass.toString())
+        dataLine
                 .append(record.interval.getContig())
                 .append(record.interval.getStart())
                 .append(record.interval.getEnd())
                 .append(record.targetCount)
-                .append(composeSegmentsString(record.truths))
-                .append(composeSegmentsString(record.calls))
-                .append(record.deletionFrequency)
-                .append(record.duplicationFrequency);
+                .append(record.sample)
+                .append(record.evaluationClass == null ? NO_VALUE : record.evaluationClass.toString())
+                .append(record.getFilterString())
+                .append(record.result.toString())
+                .append(record.truth == null ? NO_VALUE : record.truth.toString())
+                .append(record.calls.size() == 0 ? NO_VALUE : record.calls.stream().map(Object::toString).collect(Collectors.joining("; ")));
 
-    }
-
-    private String composeSegmentsString(final List<Pair<CopyNumberTriStateSegment, Set<EvaluationSegmentFilter>>> segments) {
-        if (segments.isEmpty()) {
-            return NO_SEGMENT_STRING;
-        } else {
-            return segments.stream()
-                    .map(Pair::getLeft)
-                    .map(s -> Stream.of(s.getStart(), s.getEnd(),
-                            s.getCall().toCallString(), s.getTargetCount(), s.getMean(), s.getStdev(), s.getSomeQuality(),
-                            s.getStartQuality(), s.getEndQuality()).map(Object::toString)
-                            .collect(Collectors.joining(ATTRIBUTE_SEPARATOR)))
-                    .collect(Collectors.joining(SEGMENT_SEPARATOR));
-        }
     }
 }

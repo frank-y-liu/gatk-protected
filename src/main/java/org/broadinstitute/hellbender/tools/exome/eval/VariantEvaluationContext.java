@@ -11,6 +11,7 @@ import org.broadinstitute.hellbender.utils.hmm.CopyNumberTriState;
 
 import java.lang.reflect.Array;
 import java.util.Arrays;
+import java.util.List;
 import java.util.function.ToDoubleFunction;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -40,6 +41,8 @@ public class VariantEvaluationContext extends VariantContext {
     private final double[] truthAF;
     private final double[] callsAF;
     private final int targetCount;
+    private VariantContext truth;
+    private List<VariantContext> calls;
 
     protected VariantEvaluationContext(final VariantContext other) {
         super(other);
@@ -88,5 +91,18 @@ public class VariantEvaluationContext extends VariantContext {
         }
         result[0] = 1.0 - nonRefSum;
         return result;
+    }
+
+    protected void setEvidence(final VariantContext truth, final List<VariantContext> calls) {
+        this.truth = truth;
+        this.calls = calls;
+    }
+
+    public VariantContext getTruthVariantContext() {
+        return truth;
+    }
+
+    public List<VariantContext> getCallsVariantContexts() {
+        return calls;
     }
 }

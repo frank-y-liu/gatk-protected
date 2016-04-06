@@ -17,7 +17,6 @@ import org.broadinstitute.hellbender.utils.*;
 import org.broadinstitute.hellbender.utils.tsv.DataLine;
 import org.broadinstitute.hellbender.utils.tsv.TableColumnCollection;
 import org.broadinstitute.hellbender.utils.tsv.TableWriter;
-import scala.tools.reflect.Eval;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -56,8 +55,6 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
     public static final String OVERALL_SUMMARY_LINE_FULL_NAME = "includeOverallSummaryOutputLine";
     public static final String OVERALL_SUMMARY_SAMPLE_SHORT_NAME = "overallSample";
     public static final String OVERALL_SUMMARY_SAMPLE_FULL_NAME = "overallSampleName";
-    public static final String FREQUENCY_SMOOTHING_SHORT_NAME = "smooth";
-    public static final String FREQUENCY_SMOOTHING_FULL_NAME = "frequencySmoothing";
 
     public static final String DEFAULT_OVERALL_SUMMARY_SAMPLE_NAME = "ALL";
 
@@ -65,7 +62,7 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
     protected TargetArgumentCollection targetArguments = new TargetArgumentCollection();
 
     @ArgumentCollection
-    protected CallFiltersCollection filterArguments = new CallFiltersCollection();
+    protected EvaluationFiltersArgumentCollection filterArguments = new EvaluationFiltersArgumentCollection();
 
     @Argument(
             doc = "File contained the called segments",
@@ -112,12 +109,12 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
     protected File sampleSummaryOutputFile = null;
 
     @Argument(
-            doc = "Site detail output",
+            doc = "Case detail output",
             shortName = DETAIL_CALL_OUTPUT_SHORT_NAME,
             fullName = DETAIL_CALL_OUTPUT_FULL_NAME,
             optional = true
     )
-    protected File segmentDetailOutputFile = null;
+    protected File caseDetailOutputFile = null;
 
     @Argument(
             doc = "Whether to include the overall summary line in the sample summary output file",
@@ -148,6 +145,7 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
         final TargetCollection<Target> targets = targetArguments.readTargetCollection(false);
         final VCFFileReader truthReader = openVCFReader(truthFile);
         final VCFFileReader callsReader = openVCFReader(callsFile);
+        final EvaluationCaseRecordWriter caseWriter = createCaseDetailOutputWriter(caseDetailOutputFile, targets);
         if (samples.isEmpty()) {
             samples = composeSetOfSamplesToEvaluate(callsReader);
         }
@@ -158,14 +156,57 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
         for (final SimpleInterval interval : intervals) {
             for (final VariantEvaluationContext vc : processInterval(truthReader, callsReader, interval, targets)) {
                 outputWriter.add(vc);
+                outputCases(caseWriter, vc, targets);
                 updateSampleStats(sampleStats, vc);
             }
         }
         truthReader.close();
         callsReader.close();
         outputWriter.close();
+        closeCaseRecordWriter(caseWriter);
         writeSampleSummaryFile(sampleSummaryOutputFile, sampleStats);
+
         return "SUCCESS";
+    }
+
+    private void closeCaseRecordWriter(final EvaluationCaseRecordWriter caseWriter) {
+        try {
+           if (caseWriter != null) {
+               caseWriter.close();
+           }
+        } catch (final IOException ex) {
+            throw new UserException.CouldNotCreateOutputFile(caseDetailOutputFile, ex);
+        }
+    }
+
+    private void outputCases(final EvaluationCaseRecordWriter caseWriter, final VariantEvaluationContext vc, final TargetCollection<Target> targets) {
+        if (caseWriter == null) {
+            return;
+        }
+        for (final Genotype g : vc.getGenotypes()) {
+            final EvaluationClass evalClass = GATKProtectedVariantContextUtils.getAttributeAsObject(g, VariantEvaluationContext.EVALUATION_CLASS_KEY, EvaluationClass::fromString, null);
+            if (evalClass == null) {
+                continue;
+            }
+            final String sample = g.getSampleName();
+            final SimpleInterval interval = new SimpleInterval(vc);
+            final int targetCount = targets.targetCount(interval);
+            final Set<String> variantFilters = vc.getFilters();
+            final Genotype genotype = vc.getGenotype(sample);
+            final Set<String> genotypeFilterArray = Stream.of(GATKProtectedVariantContextUtils.getAttributeAsStringArray(genotype, VCFConstants.GENOTYPE_FILTER_KEY, () -> new String[0], VCFConstants.PASSES_FILTERS_v4))
+                    .collect(Collectors.toSet());
+            final Set<String> allFilterStrings = new LinkedHashSet<>();
+            allFilterStrings.addAll(variantFilters);
+            allFilterStrings.addAll(genotypeFilterArray);
+            final Set<EvaluationSegmentFilter> allFilters = allFilterStrings.stream().map(EvaluationSegmentFilter::fromString).filter(Objects::nonNull).collect(Collectors.toSet());
+
+            final EvaluationSiteRecord record = new EvaluationSiteRecord(sample, interval, targetCount, evalClass, allFilters, vc);
+            try {
+                caseWriter.writeRecord(record);
+            } catch (final IOException ex) {
+                throw new UserException.CouldNotCreateOutputFile(this.caseDetailOutputFile, ex);
+            }
+        }
     }
 
     private void writeSampleSummaryFile(final File outputFile, final Map<String, EvaluationSampleSummaryRecord> sampleStats) {
@@ -315,6 +356,7 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
                 .map(g -> markDiscoveredGenotypesAsUnknownPositive(call, g))
                 .collect(Collectors.toList()));
         result.attribute(GenotypeCopyNumberTriStateSegments.NUMBER_OF_TARGETS_KEY, targets.targetCount(call));
+        result.evidence(null, Collections.singletonList(call));
         return result.make();
     }
 
@@ -352,6 +394,7 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
                 .map(s -> composeTruePositiveGenotype(s, truth, calls, targets))
                 .collect(Collectors.toList()));
         builder.attribute(GenotypeCopyNumberTriStateSegments.NUMBER_OF_TARGETS_KEY, targets.targetCount(truth));
+        builder.evidence(truth, calls);
         return builder.make();
     }
 
@@ -548,12 +591,12 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
         }
     }
 
-    private EvaluationSiteRecordWriter createSegmentDetailOutputWriter() {
-        if (segmentDetailOutputFile == null) {
+    private EvaluationCaseRecordWriter createCaseDetailOutputWriter(final File outputFile, final TargetCollection<Target> targets) {
+        if (outputFile == null) {
             return null;
         } else {
             try {
-                return new EvaluationSiteRecordWriter(segmentDetailOutputFile);
+                return new EvaluationCaseRecordWriter(caseDetailOutputFile);
             } catch (final IOException ex) {
                 throw new UserException.CouldNotCreateOutputFile(sampleSummaryOutputFile, ex);
             }
