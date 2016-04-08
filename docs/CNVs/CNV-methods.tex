@@ -537,14 +537,14 @@ where $\vz_s \in \mathbb{R}^D$ is a low-dimensional latent vector of laboratory 
 to obtain the joint likelihood
 %
 \begin{equation}
-P(\vn_s, \vb, \vz | \vc, \vW, \vm, \vPsi, d ) = \prod_s {\rm N}(\vz_s | \vzero, \vI) {\rm N}(\vb_s | \vW \vz_s + \vm, \vPsi) {\rm N}(\vb_s | \vm_s, \vSigma_s)
+P(\vn, \vb, \vz | \vc, \vW, \vm, \vPsi, d ) = \prod_s {\rm N}(\vz_s | \vzero, \vI) {\rm N}(\vb_s | \vW \vz_s + \vm, \vPsi) {\rm N}(\vb_s | \vm_s, \vSigma_s)
 \end{equation}
 %
 
 We can integrate out $\vb$ via the identity $\int {\rm N}(x | \mu_1, \sigma_1^2) {\rm N}(x | \mu_2, \sigma_2^2) \, dx = {\rm N}(\mu_1 | \mu_2, \sigma_1^2 + \sigma_2^2)$ to obtain
 %
 \begin{equation}
-P(\vc, \vz | \vc, \vW, \vm, \vPsi, d, \vn) = \prod_s {\rm N}(\vz_s | \vzero, \vI) {\rm N}(\vm_s | \vW \vz_s + \vm, \vPsi + \vSigma_s)
+P(\vn, \vz | \vc, \vW, \vm, \vPsi, d, \vn) = \prod_s {\rm N}(\vz_s | \vzero, \vI) {\rm N}(\vm_s | \vW \vz_s + \vm, \vPsi + \vSigma_s)
 \end{equation}
 %
 
@@ -553,8 +553,8 @@ For fixed $\vc$ we may obtain maximum likelihood estimates of $\vW$, $\vSigma$, 
 The E step follows from substituting $\vPsi \rightarrow \vPsi_s \equiv  \vPsi + \vSigma_s$ in Bishop's Equations 12.66-67 to get
 %
 \begin{align}
-\vG_s =& \left( \vI + \vW^T \vPsi_s W \right)^{-1} \\
-E \left[ \vz_s \right] =& \vG_s W^T \vPsi_s (\vm_s - \vm) \\
+\vG_s =& \left( \vI + \vW^T \vPsi_s^{-1} \vW \right)^{-1} \\
+E \left[ \vz_s \right] =& \vG_s \vW^T \vPsi_s^{-1} (\vm_s - \vm) \\
 E \left[ \vz_s \vz_s^T \right] =& \vG_s + E[\vz_s] E[\vz_s]^T
 \end{align}
 %
@@ -562,11 +562,11 @@ E \left[ \vz_s \vz_s^T \right] =& \vG_s + E[\vz_s] E[\vz_s]^T
 For the M steps, we must maximize with respect to 
 %
 \begin{align}
-E \left[ \ln {\rm N}(\vm_s | \vW \vz_s + \vm, \vPsi + \vSigma_s) \right] =& -\frac{1}{2} \sum_{st} \left[ \ln \vPsi_{st}+ E[(\vW \vz_s + \vm - \vm_s)_t^2] (\vPsi_{st})^{-1} \right] 
+E \left[ \sum_s \ln {\rm N}(\vm_s | \vW \vz_s + \vm, \vPsi + \vSigma_s) \right] =& -\frac{1}{2} \sum_{st} \left[ \ln \Psi_{st}+ E[(\vW \vz_s + \vm - \vm_s)_t^2] (\Psi_{st})^{-1} \right] 
 \end{align}
 which reduces to
 \begin{equation}
- -\frac{1}{2} \sum_{st} \left[ \ln (\vPsi_t + \Sigma_{st}) + \left( \vW_t  E[\vz_s \vz_s^T] \vW_t^T + (\vm_t - \vm_{st})^2 +2 (\vm_t - \vm_{st}) \vW_t E[\vz_s] \right)\vPsi_{st}^{-1} \right]
+ -\frac{1}{2} \sum_{st} \left[ \ln (\vPsi_t + \Sigma_{st}) + \left( \vW_t  E[\vz_s \vz_s^T] \vW_t^T + (\vm_t - \vm_{st})^2 +2 (\vm_t - \vm_{st}) \vW_t E[\vz_s] \right)\Psi_{st}^{-1} \right]
 \end{equation}
 %
 
@@ -590,7 +590,8 @@ which is straightforward to solve numerically.  Alternatively, we could approxim
 The M step equation for the row $\vW_t$ is also routine and gives
 %
 \begin{equation}
-\vW_t^T = \left( \sum_s \vPsi_{st}^{-1}  E[\vz_{s} \vz_{s}^T]  \right)^{-1} \sum_s \vPsi_{st}^{-1} ( \vm_{st} - \vm_t) E[\vz_{s}]
+\vW_t^T = \left( \sum_s \Psi_{st}^{-1}  E[\vz_{s} \vz_{s}^T]  \right)^{-1} \sum_s \Psi_{st}^{-1} ( \vm_{st} - \vm_t) E[\vz_{s}]
+\label{M_step_W}
 \end{equation}
 
 We may automatically select the number of latent features to use via an automatic relevance determination (ARD) prior on $\vW$.  That is, we add a term
@@ -599,7 +600,7 @@ P(\vW) = \prod_k \left( \frac{\alpha_k}{2 \pi} \right)^{T/2} \exp \left( -\frac{
 \end{equation}
 The E step is unaffected by this addition and the only change to the M step is that in Equation \ref{M_step_W} we now have
 \begin{equation}
-\vM_t = {\rm Diag}(\alpha_1, \alpha_2 \ldots \alpha_K) + \sum_s \vPsi_{st}^{-1}  E[\vz_{s} \vz_{s}^T] 
+\vM_t = {\rm Diag}(\alpha_1, \alpha_2 \ldots \alpha_K) + \sum_s \Psi_{st}^{-1}  E[\vz_{s} \vz_{s}^T] 
 \end{equation}
 
 The ARD coefficients $\alpha$ are determined via the evidence approximation in which their marginal likelihood is maximized.  That is, we set
@@ -615,7 +616,7 @@ The meaning of these parameters is that $\alpha_k \rightarrow \infty$ sets the $
 
 We can apply the parameters learned from the panel of normals to single-sample calling, which requires the likelihood as a function of the copy numbers $\vc$.  Applying the same E step as above, the likelihood is
 \begin{equation}
-P({\rm data} | \vc) \propto \prod_t \exp \left[ -\frac{1}{2} \left(  (\vm_t - \vm_{st})^2 +2 (\vm_t - \vm_{st}) \vW_{t} E[\vz_{s}] \right)\vPsi_{st}^{-1} \right],
+P({\rm data} | \vc) \propto \prod_t \exp \left[ -\frac{1}{2} \left(  (\vm_t - \vm_{st})^2 +2 (\vm_t - \vm_{st}) \vW_{t} E[\vz_{s}] \right)\Psi_{st}^{-1} \right],
 \end{equation}
 which depends on $\vc$ via $m_{st} = \ln \left( n_{st} / (c_{st} d_s) \right)$.  Note that this is factorized into independent likelihood terms for each target and is thus suitable for the emission model of an HMM.  This likelihood is not Gaussian in $\vc$, but it does not need to be for the Viterbi and forward-backward algorithms.
 
