@@ -184,7 +184,9 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
             return;
         }
         for (final Genotype g : vc.getGenotypes()) {
-            final EvaluationClass evalClass = GATKProtectedVariantContextUtils.getAttributeAsObject(g, VariantEvaluationContext.EVALUATION_CLASS_KEY, EvaluationClass::fromString, null);
+            final EvaluationClass evalClass =
+                    GATKProtectedVariantContextUtils.getAttributeAsObject(g, VariantEvaluationContext.EVALUATION_CLASS_KEY,
+                            EvaluationClass::fromString, null);
             if (evalClass == null) {
                 continue;
             }
@@ -193,8 +195,8 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
             final int targetCount = targets.targetCount(interval);
             final Set<String> variantFilters = vc.getFilters();
             final Genotype genotype = vc.getGenotype(sample);
-            final Set<String> genotypeFilterArray = Stream.of(GATKProtectedVariantContextUtils.getAttributeAsStringArray(genotype, VCFConstants.GENOTYPE_FILTER_KEY, () -> new String[0], VCFConstants.PASSES_FILTERS_v4))
-                    .collect(Collectors.toSet());
+            final Set<String> genotypeFilterArray = genotype.getFilters() == null ? Collections.emptySet()
+                    : Stream.of(genotype.getFilters().split(VCFConstants.INFO_FIELD_ARRAY_SEPARATOR)).collect(Collectors.toSet());
             final Set<String> allFilterStrings = new LinkedHashSet<>();
             allFilterStrings.addAll(variantFilters);
             allFilterStrings.addAll(genotypeFilterArray);
@@ -230,9 +232,9 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
             return;
         }
         for (final Genotype genotype : vc.getGenotypes()) {
-            final String[] filters = GATKProtectedVariantContextUtils.getAttributeAsStringArray(genotype, VCFConstants.GENOTYPE_FILTER_KEY, () -> new String[] {VCFConstants.PASSES_FILTERS_v4}, VCFConstants.PASSES_FILTERS_v4);
-            // ignore filtered genotypes.
-            if (Stream.of(filters)
+            final Set<String> filters = genotype.getFilters() == null ? Collections.emptySet()
+                    : Stream.of(genotype.getFilters().split(VCFConstants.INFO_FIELD_ARRAY_SEPARATOR)).collect(Collectors.toSet());
+            if (filters.stream()
                     .anyMatch(s -> !s.equals(VCFConstants.PASSES_FILTERS_v4))) {
                 continue;
             }
@@ -266,6 +268,7 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
         header.addMetaDataLine(new VCFFormatHeaderLine(VariantEvaluationContext.CALLED_SEGMENTS_LENGTH_KEY, 1, VCFHeaderLineType.Integer, "Number of targets covered by called segments"));
         header.addMetaDataLine(new VCFFormatHeaderLine(VariantEvaluationContext.CALL_QUALITY_KEY, 1, VCFHeaderLineType.Float, "1 - The probability of th event in Phred scale (the maximum if ther are more than one segment"));
         header.addMetaDataLine(new VCFFormatHeaderLine(VCFConstants.GENOTYPE_QUALITY_KEY, 1, VCFHeaderLineType.Integer, "The quality of the call (the maximum if there are more than one segment"));
+        header.addMetaDataLine(new VCFFormatHeaderLine(VCFConstants.GENOTYPE_FILTER_KEY, VCFHeaderLineCount.UNBOUNDED, VCFHeaderLineType.Character, "Genotype filters"));
 
         // Info annotations.
         header.addMetaDataLine(new VCFInfoHeaderLine(VariantEvaluationContext.TRUTH_ALLELE_FREQUENCY_KEY, VCFHeaderLineCount.A, VCFHeaderLineType.Float, "The frequency of the alternative alleles in the truth callset"));
@@ -353,14 +356,14 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
         result.alleles(call.getAlleles());
         result.genotypes(
                 call.getGenotypes().stream()
-                .map(g -> markDiscoveredGenotypesAsUnknownPositive(call, g))
+                .map(g -> composeUnknownPositiveGenotype(call, g))
                 .collect(Collectors.toList()));
         result.attribute(GenotypeCopyNumberTriStateSegments.NUMBER_OF_TARGETS_KEY, targets.targetCount(call));
         result.evidence(null, Collections.singletonList(call));
         return result.make();
     }
 
-    private Genotype markDiscoveredGenotypesAsUnknownPositive(final VariantContext enclosingContext, final Genotype g) {
+    private Genotype composeUnknownPositiveGenotype(final VariantContext enclosingContext, final Genotype g) {
             final GenotypeBuilder builder = new GenotypeBuilder(g.getSampleName());
             GATKProtectedVariantContextUtils.setGenotypeQualityFromPLs(builder, g);
             final int[] PL = g.getPL();
