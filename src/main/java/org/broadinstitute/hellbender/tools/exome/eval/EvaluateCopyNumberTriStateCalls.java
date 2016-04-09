@@ -387,7 +387,8 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
             return result;
     }
 
-    private VariantEvaluationContext composeTruePositive(final VariantContext truth, final List<VariantContext> calls, final TargetCollection<Target> targets) {
+    private VariantEvaluationContext composeTruePositive(final VariantContext truth, final List<VariantContext> calls,
+                                                         final TargetCollection<Target> targets) {
         final VariantEvaluationContextBuilder builder = new VariantEvaluationContextBuilder();
         builder.loc(truth.getContig(), truth.getStart(), truth.getEnd());
         builder.attribute(VCFConstants.END_KEY, truth.getEnd());
@@ -411,6 +412,7 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
         final int truthCopyNumber = GATKProtectedVariantContextUtils.getAttributeAsInt(truthGenotype,
                 ConvertGSVariantsToSegments.GS_COPY_NUMBER_FORMAT, truthNeutralCopyNumber);
         final CNVAllele truthAllele = copyNumberToTrueAllele(truthCopyNumber);
+
         final List<Pair<VariantContext, Genotype>> sampleUnfilteredCalls = calls.stream()
                 .map(vc -> new ImmutablePair<>(vc, vc.getGenotype(sample)))
                 .filter(pair -> pair.getRight() != null)
@@ -453,7 +455,21 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
                 })
                 .collect(Collectors.toList());
 
-        final Set<CNVAllele> calledAlleles = sampleQualifyingCalls.stream()
+        if (!sampleQualifyingCalls.isEmpty()) {
+            return composePositiveGenotype(sample, targets, truthGenotype, truthCopyNumber, truthAllele, sampleQualifyingCalls, true);
+        } else {
+            return composePositiveGenotype(sample, targets, truthGenotype, truthCopyNumber, truthAllele, sampleUnfilteredCalls, false);
+        }
+    }
+
+    private Genotype composePositiveGenotype(final String sample,
+                                             final TargetCollection<Target> targets,
+                                             final Genotype truthGenotype,
+                                             final int truthCopyNumber,
+                                             final CNVAllele truthAllele,
+                                             final List<Pair<VariantContext, Genotype>> calls,
+                                             final boolean withQualifiedCalls) {
+        final Set<CNVAllele> calledAlleles = calls.stream()
                 .map(pair -> CNVAllele.valueOf(pair.getRight().getAllele(0)))
                 .collect(Collectors.toSet());
 
@@ -461,24 +477,27 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
         final GenotypeBuilder builder = new GenotypeBuilder(sample);
         builder.alleles(Collections.singletonList(calledAllele));
         builder.attribute(VariantEvaluationContext.TRUTH_GENOTYPE_KEY, CNVAllele.ALL_ALLELES.indexOf(truthAllele.allele));
-        builder.attribute(VariantEvaluationContext.CALLED_SEGMENTS_COUNT_KEY, sampleQualifyingCalls.size());
+        builder.attribute(VariantEvaluationContext.CALLED_SEGMENTS_COUNT_KEY, calls.size());
         // When there is more than one qualified type of event we indicate how many.
-        if (calledAlleles.size() > 1) {
-            builder.attribute(VariantEvaluationContext.CALLED_ALLELE_COUNTS_KEY,
-                    CNVAllele.ALL_ALLELES.stream()
-                        .mapToInt(allele -> (int) sampleQualifyingCalls.stream()
+        builder.attribute(VariantEvaluationContext.CALLED_ALLELE_COUNTS_KEY,
+                CNVAllele.ALL_ALLELES.stream()
+                        .mapToInt(allele -> (int) calls.stream()
                                 .filter(pair -> pair.getRight().getAllele(0).equals(allele, true))
                                 .count())
                         .toArray());
-        }
         builder.attribute(VariantEvaluationContext.CALLED_SEGMENTS_LENGTH_KEY,
-                sampleQualifyingCalls.stream().mapToInt(pair -> targets.targetCount(pair.getLeft()))
-                .sum());
+                calls.stream().mapToInt(pair -> targets.targetCount(pair.getLeft()))
+                        .sum());
         builder.attribute(VariantEvaluationContext.CALL_QUALITY_KEY,
-                sampleQualifyingCalls.stream().mapToDouble(pair ->
-                    GATKProtectedVariantContextUtils.getAttributeAsDoubleArray(pair.getRight(), GenotypeCopyNumberTriStateSegments.SOME_QUALITY_KEY,
-                            () -> new double[pair.getRight().getAlleles().size()], 0.0)[
-                    pair.getLeft().getAlleles().indexOf(pair.getRight().getAllele(0)) - 1]).max().orElse(0.0));
+                calls.stream().mapToDouble(pair -> {
+                    final int alleleIndex = pair.getLeft().getAlleles().indexOf(pair.getRight().getAllele(0));
+                    if (alleleIndex == 0) {
+                        return GATKProtectedVariantContextUtils.calculateGenotypeQualityFromPLs(pair.getRight());
+                    } else {
+                        return GATKProtectedVariantContextUtils.getAttributeAsDoubleArray(pair.getRight(), GenotypeCopyNumberTriStateSegments.SOME_QUALITY_KEY,
+                                () -> new double[pair.getRight().getAlleles().size()], 0.0)[
+                                alleleIndex - 1];
+                    }}).max().orElse(0.0));
 
         builder.attribute(VariantEvaluationContext.TRUTH_COPY_FRACTION_KEY,
                 truthGenotype.getExtendedAttribute(ConvertGSVariantsToSegments.GS_COPY_NUMBER_FRACTION));
@@ -489,26 +508,28 @@ public final class EvaluateCopyNumberTriStateCalls extends CommandLineProgram {
                 MathUtils.log10SumLog10(truthPosteriors, truthCopyNumber + 1, truthPosteriors.length) - truthPosteriorsSum;
         final double truthQuality = -10.0 * truthLog10Quality;
         builder.attribute(VariantEvaluationContext.TRUTH_QUALITY_KEY, truthQuality);
-        if (truthQuality < filterArguments.minimumTruthSegmentQuality) {
-            builder.filter(EvaluationSegmentFilter.LowQuality.acronym);
+        final boolean truthPassQualityMinimum = truthQuality >= filterArguments.minimumTruthSegmentQuality;
+        if (withQualifiedCalls || calls.isEmpty()) {
+            builder.filter(truthPassQualityMinimum ? EvaluationSegmentFilter.PASS_ACRONYM : EvaluationSegmentFilter.LowQuality.acronym);
         } else {
-            builder.filter(EvaluationSegmentFilter.PASS_ACRONYM);
+            builder.filter(truthPassQualityMinimum ? EvaluationSegmentFilter.NoQualifyingCalls.acronym :
+                    String.join(VCFConstants.INFO_FIELD_ARRAY_SEPARATOR,
+                            EvaluationSegmentFilter.NoQualifyingCalls.acronym, EvaluationSegmentFilter.LowQuality.acronym));
         }
 
-        if (!calledAlleles.isEmpty() || truthAllele != CNVAllele.REF) {
+        if (calledAlleles.contains(CNVAllele.DEL) || calledAlleles.contains(CNVAllele.DUP) || truthAllele != CNVAllele.REF) {
             final EvaluationClass evaluationClass;
-            if (calledAlleles.isEmpty()) {
+            if (calledAlleles.isEmpty() || (calledAlleles.size() == 1 && calledAlleles.contains(CNVAllele.REF)) ) {
                 evaluationClass = EvaluationClass.FALSE_NEGATIVE;
             } else if (calledAlleles.size() == 1) {
                 evaluationClass = calledAlleles.contains(truthAllele) ? EvaluationClass.TRUE_POSITIVE :
-                                  truthAllele == CNVAllele.REF ? EvaluationClass.FALSE_POSITIVE :
-                                  /* else */ EvaluationClass.DISCORDANT_POSITIVE;
+                        truthAllele == CNVAllele.REF ? EvaluationClass.FALSE_POSITIVE :
+                              /* else */ EvaluationClass.DISCORDANT_POSITIVE;
             } else {
                 evaluationClass = truthAllele == CNVAllele.REF ? EvaluationClass.FALSE_POSITIVE : EvaluationClass.MIXED_POSITIVE;
             }
             builder.attribute(VariantEvaluationContext.EVALUATION_CLASS_KEY, evaluationClass.acronym);
         }
-
         return builder.make();
     }
 

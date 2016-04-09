@@ -32,7 +32,9 @@ public enum EvaluationSegmentFilter {
 
     MultiAllelicTruth("TruthMA", "Multi-allelic CNV Truth"),
 
-    MultiAllelicCalls("CallsMA", "Multi-allelic CNV Calls");
+    MultiAllelicCalls("CallsMA", "Multi-allelic CNV Calls"),
+
+    NoQualifyingCalls("NQC", "No filter passing calls overlap the truth");
 
     /**
      * Represent an empty filter set, i.e. the segment pass all filters.

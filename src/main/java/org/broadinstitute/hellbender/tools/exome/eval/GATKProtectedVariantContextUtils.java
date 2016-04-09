@@ -144,23 +144,14 @@ public class GATKProtectedVariantContextUtils {
         }
     }
 
-    /**
-     * Instead of using the GQ value, it re-calculates the quality from the PL so that it does not need
-     * to be bounded by an artificial maximum such as the standard GQ = 99.
-     * @param builder where to set the genotypes.
-     * @param genotype the PL source genotype.
-     *
-     * @return never {@code null}, but -1 if there is no PLs.
-     * @throws IllegalArgumentException if {@code genotype} is {@code null}
-     */
-    public static void setGenotypeQualityFromPLs(final GenotypeBuilder builder, final Genotype genotype) {
+    public static double calculateGenotypeQualityFromPLs(final Genotype genotype) {
         Utils.nonNull(genotype);
         if (!genotype.hasPL()) {
-            builder.noGQ();
+            return Double.NaN;
         } else {
             int[] PLs = genotype.getPL();
             if (PLs.length <= 1) {
-                builder.noGQ();
+                return Double.NaN;
             } else {
                 int best = PLs[0], secondBest = Integer.MAX_VALUE;
                 for (int i = 1; i < PLs.length; i++) {
@@ -172,8 +163,27 @@ public class GATKProtectedVariantContextUtils {
                         secondBest = next;
                     }
                 }
-                builder.GQ(secondBest - best);
+                return secondBest - best;
             }
+        }
+    }
+
+
+    /**
+     * Instead of using the GQ value, it re-calculates the quality from the PL so that it does not need
+     * to be bounded by an artificial maximum such as the standard GQ = 99.
+     * @param builder where to set the genotypes.
+     * @param genotype the PL source genotype.
+     *
+     * @return never {@code null}, but -1 if there is no PLs.
+     * @throws IllegalArgumentException if {@code genotype} is {@code null}
+     */
+    public static void setGenotypeQualityFromPLs(final GenotypeBuilder builder, final Genotype genotype) {
+        final double gq = calculateGenotypeQualityFromPLs(genotype);
+        if (Double.isNaN(gq)) {
+            builder.noGQ();
+        } else {
+            builder.GQ((int) Math.floor(gq));
         }
     }
 
