@@ -298,15 +298,50 @@ public final class ReadCountCollection implements Serializable {
     }
 
     /**
-     * Express coverage in terms of Z scores with respect to the coverage distribution of the corresponding target.
+     * Express coverage in terms of Z scores with respect to target coverage distributions determined from
+     * this {@link ReadCountCollection}.  Useful e.g. if these are the read counts of a large cohort.
      * @return a new collection.
      */
     public ReadCountCollection zScoreCounts() {
-        final RealMatrix zScoreCounts = counts().copy();    //we will edit the matrix in-place
+        final RealMatrix counts = counts().copy();
+        final double[] targetMeans = GATKProtectedMathUtils.rowMeans(counts);
+        final double[] targetStandardDeviations = GATKProtectedMathUtils.rowStdDevs(counts);
+        return zScoreCounts(targetMeans, targetStandardDeviations);
+    }
 
-        final double[] targetMeans = GATKProtectedMathUtils.rowMeans(zScoreCounts);
-        final double[] targetVariances = GATKProtectedMathUtils.rowVariances(zScoreCounts);
-        final double[] targetStandardDeviations = Arrays.stream(targetVariances).map(Math::sqrt).toArray();
+    /**
+     * Express coverage in terms of Z scores with respect to sample (column) coverage distributions determined from
+     * this {@link ReadCountCollection}.
+     * @return a new collection.
+     */
+    public ReadCountCollection zScoreCountsBySample() {
+        final RealMatrix zScoreCounts = counts().copy();    //we will edit the matrix in-place
+        final double[] sampleMeans = GATKProtectedMathUtils.columnMeans(zScoreCounts);
+        final double[] sampleStandardDeviations = GATKProtectedMathUtils.columnStdDevs(zScoreCounts);
+
+        zScoreCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
+            @Override
+            public double visit(final int target, final int sample, final double coverage) {
+                return (coverage - sampleMeans[sample]) / sampleStandardDeviations[sample];
+            }
+        });
+
+        return new ReadCountCollection(targets, columnNames, zScoreCounts);
+    }
+
+    /**
+     * Express coverage in terms of Z scores with respect to the coverage distribution of the corresponding target
+     * using target means and variances determined elsewhere, e.g. in a PoN.  Useful if these are single- or few-
+     * sample read counts.
+     * @return a new collection.
+     */
+    public ReadCountCollection zScoreCounts(final double[] targetMeans, final double[] targetStandardDeviations) {
+        final RealMatrix zScoreCounts = counts().copy();    //we will edit the matrix in-place
+        if (targetMeans.length != targets.size()) {
+            throw new IllegalArgumentException(String.format("%d targets in read counts but %d target means given", targetMeans.length, targets.size()));
+        } else if (targetStandardDeviations.length != targets.size()) {
+            throw new IllegalArgumentException(String.format("%d targets in read counts but %d target variances given", targetStandardDeviations.length, targets.size()));
+        }
 
         zScoreCounts.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override
