@@ -25,7 +25,7 @@ import java.util.stream.DoubleStream;
  * based on {@link CopyNumberTriStateHiddenMarkovModel} HMM model.
  *
  * <p>
- *     You normally want to run this tool on values normalized using {@link NormalizeSomaticReadCounts}
+ *     You normally want to run this tool on values normalized using {@link NormalizeReadCounts}
  *     which should get rid of systematic biases due to sequencing and capture technology
  * </p>
  * @author Valentin Ruano-Rubio &lt;valentin@broadinstitute.org&gt;

@@ -14,7 +14,7 @@ import java.io.File;
 public final class PlotSegmentedCopyRatio extends CommandLineProgram {
 
     @Argument(
-            doc = "Genomic targets file after tangent normalization has been applied, produced by NormalizeSomaticReadCounts: tn",
+            doc = "Genomic targets file after tangent normalization has been applied, produced by NormalizeReadCounts: tn",
             shortName = ExomeStandardArgumentDefinitions.TANGENT_NORMALIZED_COUNTS_FILE_SHORT_NAME,
             fullName =  ExomeStandardArgumentDefinitions.TANGENT_NORMALIZED_COUNTS_FILE_LONG_NAME,
             optional = false
@@ -22,7 +22,7 @@ public final class PlotSegmentedCopyRatio extends CommandLineProgram {
     protected String tangentFile;
 
     @Argument(
-            doc = "Genomic targets before tangent normalization file, produced by NormalizeSomaticReadCounts: preTN",
+            doc = "Genomic targets before tangent normalization file, produced by NormalizeReadCounts: preTN",
             shortName = ExomeStandardArgumentDefinitions.PRE_TANGENT_NORMALIZED_COUNTS_FILE_SHORT_NAME,
             fullName =  ExomeStandardArgumentDefinitions.PRE_TANGENT_NORMALIZED_COUNTS_FILE_LONG_NAME,
             optional = false

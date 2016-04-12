@@ -34,7 +34,7 @@ import java.util.List;
         oneLineSummary = "Normalizes proportional coverage (PCOV) read counts using a panel of normals",
         programGroup = CopyNumberProgramGroup.class
 )
-public final class NormalizeSomaticReadCounts extends CommandLineProgram {
+public final class NormalizeReadCounts extends CommandLineProgram {
 
     /**
      * Name of the column that contains the I.D. of the PoN <i>"eigen sample"</i>.
