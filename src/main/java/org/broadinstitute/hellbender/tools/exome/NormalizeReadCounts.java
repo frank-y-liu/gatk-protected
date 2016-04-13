@@ -108,12 +108,12 @@ public final class NormalizeReadCounts extends CommandLineProgram {
     protected File preTangentNormalizationOutFile;
 
     @Argument(
-            doc = "Output in TargetCoverage or ReadCountCollection format",
-            shortName = "tc",
-            fullName = "outputAsTargetCoverage",
+            doc = "Output in ReadCountCollection format instead of TargetCoverage format.",
+            shortName = "rcc",
+            fullName = "outputAsReadCountCollection",
             optional = true
     )
-    protected boolean outputAsTargetCoverage = false;
+    protected boolean outputAsReadCountCollection = false;
 
     @Override
     protected Object doWork() {
@@ -251,11 +251,11 @@ public final class NormalizeReadCounts extends CommandLineProgram {
      */
     private void writeTangentNormalizedOutput(final ReadCountCollection tangentNormalized) {
         try {
-            if (outputAsTargetCoverage) {
-                ReadCountCollectionUtils.writeAsTargetCoverage(outFile, tangentNormalized, "fileFormat = tsv",
+            if (outputAsReadCountCollection) {
+                ReadCountCollectionUtils.write(outFile, tangentNormalized, "fileFormat = tsv",
                         "commandLine = " + getCommandLine(), "title = Tangent normalized coverage profile");
             } else {
-                ReadCountCollectionUtils.write(outFile, tangentNormalized, "fileFormat = tsv",
+                ReadCountCollectionUtils.writeAsTargetCoverage(outFile, tangentNormalized, "fileFormat = tsv",
                         "commandLine = " + getCommandLine(), "title = Tangent normalized coverage profile");
             }
         } catch (final IOException ex) {
