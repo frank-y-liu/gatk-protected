@@ -113,7 +113,7 @@ public final class NormalizeReadCounts extends CommandLineProgram {
             fullName = "outputAsTargetCoverage",
             optional = true
     )
-    protected boolean outputAsTargetCoverage = true;
+    protected boolean outputAsTargetCoverage = false;
 
     @Override
     protected Object doWork() {
