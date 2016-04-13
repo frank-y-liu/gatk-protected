@@ -22,7 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Normalizes read counts given the PanelOfNormals.
+ * Normalizes read counts given the PanelOfNormals.  Input read counts are assumed to be proportional coverage i.e.
+ *
  *
  * <p> Dev note:  If this is extended to use spark, please be wary that the parallelization in tangent normalization is
  * by case sample, which may not yield benefits for most use cases (which are one sample)  </p>
