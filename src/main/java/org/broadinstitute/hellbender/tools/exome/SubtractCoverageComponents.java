@@ -142,9 +142,8 @@ public final class SubtractCoverageComponents extends CommandLineProgram {
         final RealMatrix resultMatrix = subtractComponentProjectionsAndTranspose(projection, transposedCoverage, eigenVectors, numComponents);
 
         // Creates the output read count collection.
-        final ReadCountCollection normalizedCoverage = new ReadCountCollection(
-                SetUniqueList.setUniqueList(composeTargetList(pca, coverage, coverageTargetIndexByName)),
-                SetUniqueList.setUniqueList(new ArrayList<>(coverage.columnNames())), resultMatrix);
+        final ReadCountCollection normalizedCoverage = new ReadCountCollection(composeTargetList(pca, coverage, coverageTargetIndexByName),
+                coverage.columnNames(), resultMatrix);
 
         // Output the result normalized coverage.
         writeOutputCoverage(normalizedCoverage);

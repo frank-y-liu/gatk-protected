@@ -56,8 +56,8 @@ undoSD=opt[["undoSD" ]]
 segment_data = function(sample_name, tn_file, output_file, log_input, weights_file, min_width, alpha, nperm, pmethod, kmax, nmin, eta, trim, undosplits, undoprune, undoSD) {
 	# Read in file and extract needed data
 	tn = read.table(tn_file, sep="\t", stringsAsFactors=FALSE, header=TRUE, check.names=FALSE)
-	contig = tn[,"contig"]
-	pos = tn[,"stop"]
+	contig = tn[,"CONTIG"]
+	pos = tn[,"END"]
 	# Ability to switch between copy-ratio and log2 copy-ratio
 	if (log_input) {
 	    dat = tn[,sample_name]

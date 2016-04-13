@@ -50,7 +50,7 @@ public final class PadTargets extends CommandLineProgram {
 
         final TargetCollection<Target> paddedTargetCollection = TargetPadder.padTargetsFromBEDFeatures(inputTargetCollection, padding);
 
-        TargetCoverageUtils.writeTargetsAsBed(outFile, paddedTargetCollection.targets());
+        TargetUtils.writeTargetsAsBed(outFile, paddedTargetCollection.targets());
 
         return "SUCCESS";
     }

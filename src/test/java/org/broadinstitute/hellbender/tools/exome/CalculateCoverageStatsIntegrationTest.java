@@ -259,11 +259,9 @@ public final class CalculateCoverageStatsIntegrationTest extends CommandLineProg
                 writer.writeAllRecords(targets);
             }
         } else {
-            final ReadCountCollection coverage = new ReadCountCollection(
-                    SetUniqueList.setUniqueList(withIntervals ? new ArrayList<>(targets) : targets.stream()
-                            .map(t -> new Target(t.getName())).collect(Collectors.toList())),
-                    SetUniqueList.setUniqueList(new ArrayList<>(sampleNames)),
-                    new Array2DRowRealMatrix(values));
+            final ReadCountCollection coverage = new ReadCountCollection(withIntervals ? new ArrayList<>(targets) :
+                    targets.stream().map(t -> new Target(t.getName())).collect(Collectors.toList()),
+                    sampleNames, new Array2DRowRealMatrix(values));
             ReadCountCollectionUtils.write(result, coverage);
         }
         return result;

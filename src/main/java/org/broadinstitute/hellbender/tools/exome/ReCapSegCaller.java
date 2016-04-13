@@ -20,6 +20,9 @@ import java.util.stream.Collectors;
  *  results of this code and the python code will not be exactly the same, but will be
  *  very close.  A fix (to make this code match the python) has been deemed unworthy of our time.</p>
  *
+ *  Note: Assumes that the input @{link ReadCountCollection} contains only one sample -- calls will be made for only one
+ *        counts column and other columns ignored.
+ *
  */
 public final class ReCapSegCaller {
     private static final Logger logger = LogManager.getLogger(ReCapSegCaller.class);
@@ -35,7 +38,7 @@ public final class ReCapSegCaller {
 
     private ReCapSegCaller() {} // prevent instantiation
 
-    private static double calculateT(final TargetCollection<TargetCoverage> targets, final List<ModeledSegment> segments) {
+    private static double calculateT(final ReadCountCollection normalizedCoverage, final List<ModeledSegment> segments) {
 
         //Get the segments that are likely copy neutral.
         // Math.abs removed to mimic python...
@@ -43,10 +46,12 @@ public final class ReCapSegCaller {
 
         // Get the targets that correspond to the copyNeutralSegments... note that individual targets, due to noise,
         //  can be far away from copy neutral
-        final List<TargetCoverage> copyNeutralTargets = copyNeutralSegments.stream()
-                .flatMap(s -> targets.targets(s).stream()).collect(Collectors.toList());
+        final TargetCollection<ReadCountRecord.SingletonRecord> targetsWithCoverage =
+                new HashedListTargetCollection<>(normalizedCoverage.records().stream().map(ReadCountRecord::asSingleton).collect(Collectors.toList()));
+        final double[] copyNeutralTargetsCopyRatio = copyNeutralSegments.stream()
+                .flatMap(s -> targetsWithCoverage.targets(s).stream())
+                .mapToDouble(ReadCountRecord.SingletonRecord::getCount).toArray();
 
-        final double [] copyNeutralTargetsCopyRatio = copyNeutralTargets.stream().mapToDouble(TargetCoverage::getCoverage).toArray();
         final double meanCopyNeutralTargets = new Mean().evaluate(copyNeutralTargetsCopyRatio);
         final double sigmaCopyNeutralTargets = new StandardDeviation().evaluate(copyNeutralTargetsCopyRatio);
 
@@ -58,16 +63,15 @@ public final class ReCapSegCaller {
     }
 
     /**
-     * Make calls for a list of segments based on the coverage data in a set of targets.
-     *
-     * @param targets the collection representing all targets
-     * @param segments segments, each of which holds a reference to these same targets
+     * Make calls for a list of segments based on the coverage data in a set of normalizedCoverage.
+     *  @param normalizedCoverage the collection representing all targets with their tangent-normalized coverage
+     * @param segments segments, each of which holds a reference to these same normalizedCoverage
      */
-    public static List<ModeledSegment> makeCalls(final TargetCollection<TargetCoverage> targets, final List<ModeledSegment> segments) {
+    public static List<ModeledSegment> makeCalls(final ReadCountCollection normalizedCoverage, final List<ModeledSegment> segments) {
         Utils.nonNull(segments, "Can't make calls on a null list of segments.");
-        Utils.nonNull(targets, "Can't make calls on a null list of targets.");
+        Utils.nonNull(normalizedCoverage, "Can't make calls on a null list of normalizedCoverage.");
 
-        final double t = calculateT(targets, segments);
+        final double t = calculateT(normalizedCoverage, segments);
 
         logger.info("Running caller that mimics the ReCapSeg 1.4.5.0 (python) caller.");
         logger.info(String.format("T in log2CR: %.4f", t));

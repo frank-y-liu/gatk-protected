@@ -15,9 +15,7 @@ import org.broadinstitute.hellbender.engine.filters.WellformedReadFilter;
 import org.broadinstitute.hellbender.engine.spark.GATKSparkTool;
 import org.broadinstitute.hellbender.engine.spark.datasources.ReadsSparkSource;
 import org.broadinstitute.hellbender.exceptions.UserException;
-import org.broadinstitute.hellbender.tools.exome.SampleCollection;
-import org.broadinstitute.hellbender.tools.exome.Target;
-import org.broadinstitute.hellbender.tools.exome.TargetCoverageUtils;
+import org.broadinstitute.hellbender.tools.exome.*;
 import org.broadinstitute.hellbender.utils.IntervalUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
@@ -116,7 +114,7 @@ public class SparkGenomeReadCounts extends GATKSparkTool {
         final long createGenomeBinsStartTime = System.currentTimeMillis();
         final List<SimpleInterval> fullGenomeBins = createFullGenomeBins(binsize, sequenceDictionary);
         List<Target> fullGenomeTargetCollection = createTargetCollectionFromSimpleInterval(fullGenomeBins);
-        TargetCoverageUtils.writeTargetsAsBed(new File(outputFile.getAbsolutePath() + ".bed"), fullGenomeTargetCollection);
+        TargetUtils.writeTargetsAsBed(new File(outputFile.getAbsolutePath() + ".bed"), fullGenomeTargetCollection);
         final long createGenomeBinsEndTime = System.currentTimeMillis();
         logger.info(String.format("Finished creating genome bins. Elapse of %d seconds",
                 (createGenomeBinsEndTime - createGenomeBinsStartTime) / 1000));
@@ -152,14 +150,14 @@ public class SparkGenomeReadCounts extends GATKSparkTool {
 
         logger.info("Writing coverage file ...");
         final long writingCovFileStartTime = System.currentTimeMillis();
-        TargetCoverageUtils.writeTargetsWithCoverageFromSimpleInterval(new File(outputFile.getAbsolutePath() + RAW_COV_OUTPUT_EXTENSION), sampleName, byKeySorted, commentsForRawCoverage);
+        ReadCountCollectionUtils.writeReadCountsFromSimpleInterval(new File(outputFile.getAbsolutePath() + RAW_COV_OUTPUT_EXTENSION), sampleName, byKeySorted, commentsForRawCoverage);
         final long writingCovFileEndTime = System.currentTimeMillis();
         logger.info(String.format("Finished writing coverage file. Elapse of %d seconds",
                 (writingCovFileEndTime - writingCovFileStartTime) / 1000));
 
         logger.info("Writing proportional coverage file ...");
         final long writingPCovFileStartTime = System.currentTimeMillis();
-        TargetCoverageUtils.writeTargetsWithCoverageFromSimpleInterval(outputFile, sampleName, byKeyProportionalSorted,
+        ReadCountCollectionUtils.writeReadCountsFromSimpleInterval(outputFile, sampleName, byKeyProportionalSorted,
                 commentsForProportionalCoverage);
         final long writingPCovFileEndTime = System.currentTimeMillis();
         logger.info(String.format("Finished writing proportional coverage file. Elapse of %d seconds",
@@ -203,7 +201,7 @@ public class SparkGenomeReadCounts extends GATKSparkTool {
     }
 
     private List<Target> createTargetCollectionFromSimpleInterval(final List<SimpleInterval> intervalList){
-        return intervalList.stream().map(s->new Target(TargetCoverageUtils.createDummyTargetName(s),
+        return intervalList.stream().map(s->new Target(TargetUtils.createDummyTargetName(s),
                 new SimpleInterval(s))).collect(Collectors.toList());
     }
 }

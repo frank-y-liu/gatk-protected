@@ -2,8 +2,10 @@ package org.broadinstitute.hellbender.tools.exome;
 
 import org.broadinstitute.hellbender.cmdline.*;
 import org.broadinstitute.hellbender.cmdline.programgroups.CopyNumberProgramGroup;
+import org.broadinstitute.hellbender.exceptions.UserException;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -32,7 +34,7 @@ public final class CallSegments extends CommandLineProgram{
             fullName = ExomeStandardArgumentDefinitions.TARGET_FILE_LONG_NAME,
             optional = false
     )
-    protected File targetsFile;
+    protected File normalizedCoveragedFile;
 
     @Argument(
             doc = "segments files",
@@ -81,18 +83,23 @@ public final class CallSegments extends CommandLineProgram{
 
     @Override
     protected Object doWork() {
-        final TargetCollection<TargetCoverage> targets = TargetCoverageUtils.readModeledTargetFileIntoTargetCollection(targetsFile);
+        final ReadCountCollection normalizedCoverage;
+        try {
+            normalizedCoverage = ReadCountCollectionUtils.parse(normalizedCoveragedFile);
+        } catch (final IOException e) {
+            throw new UserException.CouldNotReadInputFile(normalizedCoveragedFile, e);
+        }
         List<ModeledSegment> segments = isLegacyFormatSegFile ? SegmentUtils.readModeledSegmentsFromLegacySegmentFile(segmentsFile) :
                SegmentUtils.readModeledSegmentsFromSegmentFile(segmentsFile);
 
         //add calls to segments in-place
         if (useExperimentalCaller) {
-            CnvCaller.makeCalls(targets, segments, zThreshold);
+            CnvCaller.makeCalls(normalizedCoverage, segments, zThreshold);
         } else {
-            ReCapSegCaller.makeCalls(targets, segments);
+            ReCapSegCaller.makeCalls(normalizedCoverage, segments);
         }
 
-        final String sample = TargetCoverageUtils.getSampleNameForCLIsFromTargetCoverageFile(targetsFile);
+        final String sample = ReadCountCollectionUtils.getSampleNameForCLIsFromReadCountsFile(normalizedCoveragedFile);
         SegmentUtils.writeModeledSegmentFile(outFile, segments, sample);
         return "SUCCESS";
     }

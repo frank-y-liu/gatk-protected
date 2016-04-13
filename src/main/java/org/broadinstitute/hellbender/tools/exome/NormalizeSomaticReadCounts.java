@@ -141,7 +141,7 @@ public final class NormalizeSomaticReadCounts extends CommandLineProgram {
         }
 
         try {
-            ReadCountCollectionUtils.writeAsTargetCoverage(preTangentNormalizationOutFile, preTangentNormalized, "fileFormat = tsv",
+            ReadCountCollectionUtils.write(preTangentNormalizationOutFile, preTangentNormalized, "fileFormat = tsv",
                     "commandLine = " + getCommandLine(), "title = Pre tangent normalized coverage profile");
         } catch (final IOException ex) {
             throw new UserException.CouldNotCreateOutputFile(preTangentNormalizationOutFile, ex.getMessage());
@@ -242,7 +242,7 @@ public final class NormalizeSomaticReadCounts extends CommandLineProgram {
      */
     private void writeTangentNormalizedOutput(final ReadCountCollection tangentNormalized) {
         try {
-            ReadCountCollectionUtils.writeAsTargetCoverage(outFile, tangentNormalized, "fileFormat = tsv",
+            ReadCountCollectionUtils.write(outFile, tangentNormalized, "fileFormat = tsv",
                     "commandLine = " + getCommandLine(),
                     "title = Tangent normalized coverage profile");
         } catch (final IOException ex) {

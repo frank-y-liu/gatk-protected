@@ -11,6 +11,7 @@ import org.broadinstitute.hellbender.utils.param.ParamUtils;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * This caller is considered experimental.
@@ -27,6 +28,8 @@ import java.util.List;
  *
  * Note:  Assumes that the incoming target file is in log_2(CR)
  * Note:  Assumes that the incoming segment means are CR.
+ * Note: Assumes that the input @{link ReadCountCollection} contains only one sample -- calls will be made for only one
+ *      counts column and other columns ignored.
  *
  * @author David Benjamin
  */
@@ -52,39 +55,39 @@ public final class CnvCaller {
     private CnvCaller() {} // prevent instantiation
 
     /**
-     * Make calls for a list of segments based on the coverage data in a set of targets.
-     *
-     * @param targets the collection representing all targets
-     * @param segments segments, each of which holds a reference to these same targets
+     * Make calls for a list of segments based on the coverage data in a set of targets and their tangent-normalized coverage.
+     *  @param normalizedCoverage the collection representing targets and their tangent-normalized coverage
+     * @param segments segments, each of which holds a reference to these same normalizedCoverage
      * @param zThreshold number of standard deviations from mean required to call an amplification or deletion
      */
-    public static List<ModeledSegment> makeCalls(final TargetCollection<TargetCoverage> targets, final List<ModeledSegment> segments, final double zThreshold) {
+    public static List<ModeledSegment> makeCalls(final ReadCountCollection normalizedCoverage, final List<ModeledSegment> segments, final double zThreshold) {
         Utils.nonNull(segments, "Can't make calls on a null list of segments.");
-        Utils.nonNull(targets, "Can't make calls on a null list of targets.");
+        Utils.nonNull(normalizedCoverage, "Can't make calls on a null list of normalizedCoverage.");
         ParamUtils.isPositiveOrZero(zThreshold, "zThreshold must be positive or zero.");
 
         logger.warn("This caller is still considered experimental.");
 
         /**
-         * estimate the copy-number neutral log_2 coverage as the median over all targets.
+         * estimate the copy-number neutral log_2 coverage as the median over all normalizedCoverage.
          * As a precaution we take the median after filtering extreme coverages that are definitely not neutral
          * i.e. those below -NON_NEUTRAL_COVERAGE or above +NON_NEUTRAL_COVERAGE
+         *
+         * Note that we use column 0, implicitly assuming that there is only one sample / column
          */
-        final double []  nonExtremeCoverage = targets.targets()
-                .stream()
-                .mapToDouble(TargetCoverage::getCoverage)
-                .filter(c -> Math.abs(c) < NON_NEUTRAL_THRESHOLD)
-                .toArray();
+        final double []  nonExtremeCoverage = Arrays.stream(normalizedCoverage.counts().getColumn(0))
+                .filter(c -> Math.abs(c) < NON_NEUTRAL_THRESHOLD).toArray();
         final double neutralCoverage = new Median().evaluate(nonExtremeCoverage);
 
         logger.info(String.format("True copy neutral estimate (median): %.3f", neutralCoverage));
         logger.info(String.format("True copy neutral estimate (median) in CR: %.3f", Math.pow(2, neutralCoverage)));
 
-        // Get the standard deviation of targets belonging to high-confidence neutral segments
+        // Get the standard deviation of normalizedCoverage belonging to high-confidence neutral segments
+        final TargetCollection<ReadCountRecord.SingletonRecord> targetsWithCoverage =
+                new HashedListTargetCollection<>(normalizedCoverage.records().stream().map(ReadCountRecord::asSingleton).collect(Collectors.toList()));
         final double[] nearNeutralCoverage = segments.stream()
                 .filter(s -> Math.abs(s.getSegmentMean() - neutralCoverage) < COPY_NEUTRAL_CUTOFF)
-                .flatMap(s -> targets.targets(s).stream())
-                .mapToDouble(TargetCoverage::getCoverage)
+                .flatMap(s -> targetsWithCoverage.targets(s).stream())
+                .mapToDouble(ReadCountRecord.SingletonRecord::getCount)
                 .toArray();
         final double neutralSigma = new StandardDeviation().evaluate(nearNeutralCoverage);
         logger.info(String.format("Neutral Sigma (unfiltered): %.4f", neutralSigma));
@@ -99,10 +102,10 @@ public final class CnvCaller {
 
         for (final ModeledSegment segment : segments) {
             //Get the number of standard deviations the mean falls from the copy neutral value
-            //we should really use the standard deviation of the mean of segment.numTargets() targets
+            //we should really use the standard deviation of the mean of segment.numTargets() normalizedCoverage
             //which is sigma/ sqrt(numTargets).  However, the underlying segment means vary due to noise not
             //removed by tangent normalization, and such a caller would be too strict.
-            //Thus we just use the population standard deviation of targets, and defer a mathematically
+            //Thus we just use the population standard deviation of normalizedCoverage, and defer a mathematically
             //principled treatment for a later caller
             final double z = (segment.getSegmentMean() - neutralCoverage)/neutralSigmaFiltered;
 

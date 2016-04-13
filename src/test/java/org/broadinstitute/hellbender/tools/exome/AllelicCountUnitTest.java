@@ -48,16 +48,4 @@ public class AllelicCountUnitTest {
         Assert.assertEquals(new AllelicCount(interval, 10, 20).estimateAltAlleleFraction(), 0.6666666, tolerance);
         Assert.assertEquals(new AllelicCount(interval, 10, 90).estimateAltAlleleFraction(), 0.9, tolerance);
     }
-
-    @Test
-    public void testToMinorAlleleFractionTargetCoverage() {
-        final SimpleInterval interval = new SimpleInterval("contig", 1, 2);
-        final String sample = "sample";
-        final TargetCoverage result = new AllelicCount(interval, 10, 10).toMinorAlleleFractionTargetCoverage(sample);
-
-        final TargetCoverage expected = new TargetCoverage(sample, interval, 0.5);
-        Assert.assertEquals(result.getInterval(), expected.getInterval());
-        Assert.assertEquals(result.getName(), expected.getName());
-        Assert.assertEquals(result.getCoverage(), expected.getCoverage());
-    }
 }

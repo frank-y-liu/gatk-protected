@@ -75,7 +75,7 @@ PlotAlleleFraction = function(snp_df, segments_df){
 }
 
 PlotCopyRatio = function(df, color) {
-  genome.crds = chromosome_starts[df$contig] + df$stop
+  genome.crds = chromosome_starts[df$CONTIG] + df$END
   points(x=genome.crds, y=df$VALUE, col=color, pch=16, cex=0.2)
 }
 
@@ -85,8 +85,8 @@ PlotCopyRatioWithSegments = function(coverage_df, segments_df, is_ACNV ) {
      segment_start = segments_df[s, "Start"]
      segment_end = segments_df[s, "End"]
 
-     target_indices=which(coverage_df[,"contig"] == contig & coverage_df[,"stop"] > segment_start & coverage_df[,"stop"] < segment_end)
-     genomic_coordinates = chromosome_starts[contig] + coverage_df[ target_indices,"stop"]
+     target_indices=which(coverage_df[,"CONTIG"] == contig & coverage_df[,"END"] > segment_start & coverage_df[,"END"] < segment_end)
+     genomic_coordinates = chromosome_starts[contig] + coverage_df[ target_indices,"END"]
      colors=c("coral", "dodgerblue")
      points(x=genomic_coordinates, y=coverage_df[target_indices, "VALUE"], col=colors[s%%2+1], pch=16, cex=0.2)
 

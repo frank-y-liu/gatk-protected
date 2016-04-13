@@ -11,7 +11,7 @@ import java.util.stream.LongStream;
  *
  * @author Valentin Ruano-Rubio &lt;valentin@broadinstitute.org&gt;
  */
-public final class ReadCountRecord implements Feature {
+public class ReadCountRecord implements Feature {
 
     private final Target target;
 
@@ -121,6 +121,10 @@ public final class ReadCountRecord implements Feature {
         return counts[index];
     }
 
+    public SingletonRecord asSingleton() {
+        return new SingletonRecord(this);
+    }
+
     @Override
     @Deprecated
     public String getChr() {
@@ -141,4 +145,25 @@ public final class ReadCountRecord implements Feature {
     public int getEnd() {
         return target.getEnd();
     }
+
+    public static class SingletonRecord extends ReadCountRecord {
+        public SingletonRecord(final Target target, final double[] counts) {
+            super(target, counts);
+            if (counts.length != 1) {
+                throw new IllegalArgumentException("SingletonRecord must have exactly one count.");
+            }
+        }
+
+        public SingletonRecord(final Target target, final double count) {
+            this(target, new double[] {count});
+        }
+
+        public SingletonRecord(final ReadCountRecord record) {
+            this(record.target, record.counts);
+        }
+
+        public double getCount() {
+            return getDouble(0);
+        }
+     }
 }
