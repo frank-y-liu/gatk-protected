@@ -25,8 +25,8 @@ public final class CopyNumberTriStateHiddenMarkovModelArgumentCollection {
     public static final String MEAN_DUPLICATION_COVERAGE_SHIFT_SHORT_NAME = "duplicationShift";
 
     @Argument(doc = "Probability that a base in a copy-neutral segment is followed by a base belonging to a CNV.",
-              fullName = EVENT_START_PROBABILITY_SHORT_NAME,
-              shortName = EVENT_START_PROBABILITY_FULL_NAME,
+              fullName = EVENT_START_PROBABILITY_FULL_NAME,
+              shortName = EVENT_START_PROBABILITY_SHORT_NAME,
               optional = true)
     public double eventStartProbability = 1.0e-8;
 
