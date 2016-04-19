@@ -25,10 +25,6 @@ import java.util.*;
  *         (either a deletion or duplication).</dd>
  *         <dt>Mean event target distance</dt><dd>(meanEventSize in the paper) the expectation of the distance (in base-pairs) between
  *         consecutive targets in an event.</dd>
- *         <dt>Mean coverage depth shift for deletions</dt><dd>(-M in the paper) what is the average negative shift
- *         in coverage in regions that have undergone a copy loss.</dd>
- *         <dt>Mean coverage depth shift for duplications</dt><dd>(+M in the paper) what is the average positive
- *         shift in coverage depth in regions that have undergone a copy gain</dd>
  *     </dl>
  *     <p>
  *      Notice that this implementation allows a different shift magnitude for deletions and duplications which is fix
@@ -71,7 +67,11 @@ public final class CopyNumberTriStateHiddenMarkovModel
      */
     private static final double DUPLICATION_DISTRIBUTION_SD = 1.0;
 
-    private final Map<CopyNumberTriState, NormalDistribution> emissionDistributionByState;
+    protected static final double LOG_2_COPY_RATIO_FOR_SINGLE_DELETION = Math.log(0.5)/Math.log(2.0); //this is log_2(1/2)
+
+    protected static final double LOG_2_COPY_RATIO_FOR_SINGLE_DUPLICATION = Math.log(1.5)/Math.log(2.0);
+
+    private final Map<CopyNumberTriState, NormalDistribution> emissionDistributionByState; //this is log_2(3/2)
 
     private final CopyNumberTriStateTransitionProbabilityCache logTransitionProbabilityCache;
 
@@ -81,7 +81,7 @@ public final class CopyNumberTriStateHiddenMarkovModel
     //per-base probability of transition from neutral to CNV state
     private final double eventStartProbability;
 
-    //average size in bases of CNVs
+    //average size, in bases, of CNVs
     private final double meanEventSize;
 
     /**
@@ -89,24 +89,22 @@ public final class CopyNumberTriStateHiddenMarkovModel
      *
      * @param eventStartProbability the probability per base pair of a transition from neutral to a CNV
      * @param meanEventSize the expectation of the distance between consecutive targets in an event
-     * @param deletionMeanShift the deletion depth of coverage negative shift.
-     * @param duplicationMeaShift the duplication depth of coverage positive shift.
      * @throws IllegalArgumentException if any of the model parameters has an invalid value.
      */
     public CopyNumberTriStateHiddenMarkovModel(final double eventStartProbability,
-                                               final double meanEventSize, final double deletionMeanShift,
-                                               final double duplicationMeaShift) {
+                                               final double meanEventSize) {
         ParamUtils.inRange(eventStartProbability, 0, 1, "Event probability must be between 0 and 1.");
-        ParamUtils.isNegativeOrZero(deletionMeanShift, "Deletion coverage shift must be negative.");
-        ParamUtils.isPositiveOrZero(duplicationMeaShift, "Duplication coverage shift must be positive");
         ParamUtils.isPositive(meanEventSize, "Mean event size must be positive.");
         this.eventStartProbability = eventStartProbability;
         this.meanEventSize = meanEventSize;
         logTransitionProbabilityCache = new CopyNumberTriStateTransitionProbabilityCache(meanEventSize, eventStartProbability);
         emissionDistributionByState = new EnumMap<>(CopyNumberTriState.class);
-        emissionDistributionByState.put(CopyNumberTriState.NEUTRAL, new NormalDistribution(0, NEUTRAL_DISTRIBUTION_SD));
-        emissionDistributionByState.put(CopyNumberTriState.DELETION, new NormalDistribution(deletionMeanShift, DELETION_DISTRIBUTION_SD));
-        emissionDistributionByState.put(CopyNumberTriState.DUPLICATION, new NormalDistribution(duplicationMeaShift, DUPLICATION_DISTRIBUTION_SD));
+        emissionDistributionByState.put(CopyNumberTriState.NEUTRAL,
+                new NormalDistribution(0, NEUTRAL_DISTRIBUTION_SD));
+        emissionDistributionByState.put(CopyNumberTriState.DELETION,
+                new NormalDistribution(LOG_2_COPY_RATIO_FOR_SINGLE_DELETION, DELETION_DISTRIBUTION_SD));
+        emissionDistributionByState.put(CopyNumberTriState.DUPLICATION,
+                new NormalDistribution(LOG_2_COPY_RATIO_FOR_SINGLE_DUPLICATION, DUPLICATION_DISTRIBUTION_SD));
     }
 
     @Override

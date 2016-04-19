@@ -41,7 +41,7 @@ public abstract class CopyNumberTriStateSegmentsCallerIntegrationTest extends Co
         }
     }
     public static final CopyNumberTriStateHiddenMarkovModel[] TEST_MODELS = new CopyNumberTriStateHiddenMarkovModel[] {
-        new CopyNumberTriStateHiddenMarkovModel(1e-4, 70_000, -3, 3)
+        new CopyNumberTriStateHiddenMarkovModel(1e-4, 70_000)
     };
 
     public static File writeChainInTempFile(final DiscoverCopyNumberTriStateSegmentsIntegrationTest.HiddenMarkovModelChain chain) {
@@ -157,15 +157,10 @@ public abstract class CopyNumberTriStateSegmentsCallerIntegrationTest extends Co
     }
 
     protected void loadModelArguments(HiddenMarkovModelChain chain, List<String> arguments) {
-        arguments.add("-" + CopyNumberTriStateHiddenMarkovModelArgumentCollection.MEAN_DELETION_COVERAGE_SHIFT_SHORT_NAME);
-        arguments.add(String.valueOf(chain.model.getDeletionMean()));
-        arguments.add("-" + CopyNumberTriStateHiddenMarkovModelArgumentCollection.MEAN_DUPLICATION_COVERAGE_SHIFT_SHORT_NAME);
-        arguments.add(String.valueOf(chain.model.getDuplicationMean()));
         arguments.add("-" + CopyNumberTriStateHiddenMarkovModelArgumentCollection.EVENT_START_PROBABILITY_SHORT_NAME);
         arguments.add(String.valueOf(chain.model.getEventStartProbability()));
         arguments.add("-" + CopyNumberTriStateHiddenMarkovModelArgumentCollection.MEAN_EVENT_SIZE_SHORT_NAME);
         arguments.add(String.valueOf(chain.model.getMeanEventSize()));
-        arguments.add("-" + DiscoverCopyNumberTriStateSegments.ZSCORE_DIMENSION_SHORT_NAME);
     }
 
     public static class HiddenMarkovModelChain {

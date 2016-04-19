@@ -88,7 +88,6 @@ public class DiscoverCopyNumberTriStateSegmentsIntegrationTest extends CopyNumbe
         arguments.add("-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME);
         arguments.add(outputFile.getAbsolutePath());
         loadModelArguments(chain, arguments);
-        arguments.add(String.valueOf(DiscoverCopyNumberTriStateSegments.ZScoreDimension.NONE.toString()));
         runCommandLine(arguments.toArray(new String[arguments.size()]));
     }
 
@@ -146,8 +145,6 @@ public class DiscoverCopyNumberTriStateSegmentsIntegrationTest extends CopyNumbe
     public Object[][] testBadModelArgumentsData() {
         return new Object[][] {
                 {CopyNumberTriStateHiddenMarkovModelArgumentCollection.EVENT_START_PROBABILITY_FULL_NAME, -1.0D},
-                {CopyNumberTriStateHiddenMarkovModelArgumentCollection.MEAN_DELETION_COVERAGE_SHIFT_SHORT_NAME, 1.1D},
-                {CopyNumberTriStateHiddenMarkovModelArgumentCollection.MEAN_DUPLICATION_COVERAGE_SHIFT_SHORT_NAME, -1.1D},
                 {CopyNumberTriStateHiddenMarkovModelArgumentCollection.MEAN_EVENT_SIZE_SHORT_NAME, -1.0D},
         };
     }

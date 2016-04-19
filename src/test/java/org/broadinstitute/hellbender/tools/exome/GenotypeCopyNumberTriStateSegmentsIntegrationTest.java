@@ -50,7 +50,6 @@ public class GenotypeCopyNumberTriStateSegmentsIntegrationTest extends CopyNumbe
         arguments.add("-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME);
         arguments.add(outputFile.getAbsolutePath());
         loadModelArguments(chain, arguments);
-        arguments.add(String.valueOf(CopyNumberTriStateSegmentCaller.ZScoreDimension.NONE.toString()));
         runCommandLine(arguments);
         Assert.assertTrue(outputFile.exists());
         assertSegmentsAndOutputConcordance(segmentsFile, outputFile);

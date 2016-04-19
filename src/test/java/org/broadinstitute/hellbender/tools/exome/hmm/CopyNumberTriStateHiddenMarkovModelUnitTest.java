@@ -21,24 +21,22 @@ import java.util.function.Function;
 public final class CopyNumberTriStateHiddenMarkovModelUnitTest {
 
     private static double[] TEST_COVERAGE_VALUES = new double[] {
-            100.0, 10.0, 3.0, 1.0, 0.5, 0.1, 0.00001, 0.0, -0.00001, -0.1, -0.5, -1.0, -3.0, -10.0, -100.0 };
+            10.0, 3.0, 1.0, 0.1, 0.00001, 0.0, -0.1, -1.0, -3.0};
 
     private static int[] TEST_TARGET_DISTANCES = new int[] {
-            0, 10, 30, 100, 300, 1000, 3000, 10000, 300000, 1000000, 10000000};
+            0, 10, 100, 1000, 10000, 10000000};
 
     private static final double EPSILON = 1e-10;
 
     @Test(dataProvider = "testData")
-    public void testInstantiation(final double eventStartProbability, final double meanEventSize,
-                                  final double deletionMean, final double duplicationMean) {
-         new CopyNumberTriStateHiddenMarkovModel(eventStartProbability, meanEventSize, deletionMean, duplicationMean);
+    public void testInstantiation(final double eventStartProbability, final double meanEventSize) {
+         new CopyNumberTriStateHiddenMarkovModel(eventStartProbability, meanEventSize);
     }
 
     @Test(dataProvider = "testData", dependsOnMethods = "testInstantiation")
-    public void testHiddenStates(final double eventStartProbability, final double meanEventSize,
-                               final double deletionMean, final double duplicationMean) {
+    public void testHiddenStates(final double eventStartProbability, final double meanEventSize) {
         final CopyNumberTriStateHiddenMarkovModel model = new CopyNumberTriStateHiddenMarkovModel(eventStartProbability,
-                meanEventSize, deletionMean, duplicationMean);
+                meanEventSize);
 
         final List<CopyNumberTriState> hiddenStates = model.hiddenStates();
         Assert.assertNotNull(hiddenStates);
@@ -47,16 +45,15 @@ public final class CopyNumberTriStateHiddenMarkovModelUnitTest {
     }
 
     @Test(dataProvider = "testData", dependsOnMethods = "testInstantiation")
-    public void testLogEmissionProbability(final double eventStartProbability, final double meanEventSize,
-                                           final double deletionMean, final double duplicationMean) {
+    public void testLogEmissionProbability(final double eventStartProbability, final double meanEventSize) {
 
         final CopyNumberTriStateHiddenMarkovModel model = new CopyNumberTriStateHiddenMarkovModel(eventStartProbability,
-                meanEventSize, deletionMean, duplicationMean);
+                meanEventSize);
         final Target target = new Target("NAME");
         final double logDenominator = Math.log(Math.sqrt(2 * Math.PI));
         final Function<Double, Double> neutralEmission = x -> -.5 * (x * x) - logDenominator;
-        final Function<Double, Double> deletionEmission = x -> -.5 * Math.pow(x - deletionMean, 2) - logDenominator;
-        final Function<Double, Double> duplicationEmission = x -> -.5 * Math.pow(x - duplicationMean, 2) - logDenominator;
+        final Function<Double, Double> deletionEmission = x -> -.5 * Math.pow(x - CopyNumberTriStateHiddenMarkovModel.LOG_2_COPY_RATIO_FOR_SINGLE_DELETION, 2) - logDenominator;
+        final Function<Double, Double> duplicationEmission = x -> -.5 * Math.pow(x - CopyNumberTriStateHiddenMarkovModel.LOG_2_COPY_RATIO_FOR_SINGLE_DUPLICATION, 2) - logDenominator;
         for (final double coverage : TEST_COVERAGE_VALUES) {
             final double neutralObserved = model.logEmissionProbability(coverage, CopyNumberTriState.NEUTRAL, target);
             final double deletionObserved = model.logEmissionProbability(coverage, CopyNumberTriState.DELETION, target);
@@ -71,10 +68,9 @@ public final class CopyNumberTriStateHiddenMarkovModelUnitTest {
     }
 
     @Test(dataProvider = "testData", dependsOnMethods = "testInstantiation")
-    public void testLogTransitionProbability(final double eventStartProbability, final double meanEventSize,
-                                             final double deletionMean, final double duplicationMean) {
+    public void testLogTransitionProbability(final double eventStartProbability, final double meanEventSize) {
         final CopyNumberTriStateHiddenMarkovModel model = new CopyNumberTriStateHiddenMarkovModel(eventStartProbability,
-                meanEventSize, deletionMean, duplicationMean);
+                meanEventSize);
 
         final Target fromTarget = new Target("target1", new SimpleInterval("1", 1000000000, 1000000100));
         for (final int distance : TEST_TARGET_DISTANCES) {
@@ -87,10 +83,9 @@ public final class CopyNumberTriStateHiddenMarkovModelUnitTest {
     }
 
     @Test(dataProvider = "testData", dependsOnMethods = "testInstantiation")
-    public void testLogTransitionProbabilityWithNoDistance(final double eventStartProbability, final double meanEventSize,
-                                                           final double deletionMean, final double duplicationMean) {
+    public void testLogTransitionProbabilityWithNoDistance(final double eventStartProbability, final double meanEventSize) {
         final CopyNumberTriStateHiddenMarkovModel model = new CopyNumberTriStateHiddenMarkovModel(eventStartProbability,
-                meanEventSize, deletionMean, duplicationMean);
+                meanEventSize);
 
         final Target fromTarget = new Target("target1");
         final Target toTarget = new Target("target2");
@@ -99,11 +94,10 @@ public final class CopyNumberTriStateHiddenMarkovModelUnitTest {
     }
 
     @Test(dataProvider = "testData", dependsOnMethods = "testInstantiation")
-    public void testLogTransitionProbabilityOverlappingTargets(final double eventRate, final double meanEventSize,
-                                                           final double deletionMean, final double duplicationMean) {
+    public void testLogTransitionProbabilityOverlappingTargets(final double eventRate, final double meanEventSize) {
 
         final CopyNumberTriStateHiddenMarkovModel model = new CopyNumberTriStateHiddenMarkovModel(eventRate,
-                meanEventSize, deletionMean, duplicationMean);
+                meanEventSize);
         final Target fromTarget = new Target("target1", new SimpleInterval("1", 1, 100));
         final Target toTarget = new Target("target2", new SimpleInterval("1", 50, 150));
         assertTransitionProbabilities(eventRate, meanEventSize, model, fromTarget, toTarget);
@@ -111,10 +105,9 @@ public final class CopyNumberTriStateHiddenMarkovModelUnitTest {
 
     //the prior should be the infinite distance limit of the transition matrix
     @Test(dataProvider = "testData", dependsOnMethods = "testInstantiation")
-    public void testLogPrior(final double eventStartProbability, final double meanEventSize,
-                                             final double deletionMean, final double duplicationMean) {
+    public void testLogPrior(final double eventStartProbability, final double meanEventSize) {
         final CopyNumberTriStateHiddenMarkovModel model = new CopyNumberTriStateHiddenMarkovModel(eventStartProbability,
-                meanEventSize, deletionMean, duplicationMean);
+                meanEventSize);
         final Target target = new Target("NAME");
 
         final CopyNumberTriStateTransitionProbabilityCache logTransitionProbabilityCache =
@@ -129,10 +122,9 @@ public final class CopyNumberTriStateHiddenMarkovModelUnitTest {
     // different chromosomes are independent Markov chains; hence the transition probabilities should equal the prior
     // probabilities
     @Test(dataProvider = "testData", dependsOnMethods = {"testInstantiation", "testLogPrior"})
-    public void testLogTransitionProbabilityInDifferentChromosomes(final double eventStartProbability, final double meanEventSize,
-                                                                   final double deletionMean, final double duplicationMean) {
+    public void testLogTransitionProbabilityInDifferentChromosomes(final double eventStartProbability, final double meanEventSize) {
         final CopyNumberTriStateHiddenMarkovModel model = new CopyNumberTriStateHiddenMarkovModel(eventStartProbability,
-                meanEventSize, deletionMean, duplicationMean);
+                meanEventSize);
 
         final Target fromTarget = new Target("target1", new SimpleInterval("1", 1, 100));
         final Target toTarget = new Target("target2", new SimpleInterval("2", 1, 100));
@@ -142,7 +134,7 @@ public final class CopyNumberTriStateHiddenMarkovModelUnitTest {
 
     @Test(dependsOnMethods = "testInstantiation")
     public void testDistance() {
-        final CopyNumberTriStateHiddenMarkovModel model = new CopyNumberTriStateHiddenMarkovModel(0.5, 10, -1, 1);
+        final CopyNumberTriStateHiddenMarkovModel model = new CopyNumberTriStateHiddenMarkovModel(0.5, 10);
 
         // different chromosomes
         Assert.assertEquals(model.calculateDistance(new Target("target1", new SimpleInterval("1", 1, 100)),
@@ -169,9 +161,9 @@ public final class CopyNumberTriStateHiddenMarkovModelUnitTest {
     @DataProvider(name = "testData")
     public Object[][] testData() {
         return new Object[][] {
-                {1.0e-10D, 70000D, -1D, 1D},
-                {1.0e-5D, 10000D, -3.3D, +3.3D},
-                {.25D, 10D, -.5D, +.5D}
+                {1.0e-10D, 70000D},
+                {1.0e-5D, 10000D},
+                {.25D, 10D}
         };
     }
 

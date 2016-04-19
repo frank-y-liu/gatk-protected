@@ -25,10 +25,6 @@ import java.util.*;
  * @author Valentin Ruano-Rubio &lt;valentin@broadinstitute.org&gt;
  */
 public abstract class CopyNumberTriStateSegmentCaller extends CommandLineProgram {
-
-    public static final String ZSCORE_DIMENSION_FULL_NAME = "standardizeBy";
-    public static final String ZSCORE_DIMENSION_SHORT_NAME = "standardizeBy";
-
     /**
      * Threshold used to determine best way to calculate log(1- exp(a))
      * based on https://cran.r-project.org/web/packages/Rmpfr/vignettes/log1mexp-note.pdf
@@ -65,37 +61,8 @@ public abstract class CopyNumberTriStateSegmentCaller extends CommandLineProgram
     protected CopyNumberTriStateHiddenMarkovModelArgumentCollection modelArguments =
             new CopyNumberTriStateHiddenMarkovModelArgumentCollection();
 
-    /**
-     * Z-scores transformation dimensions.
-     */
-    public enum ZScoreDimension {
-
-        /**
-         * Input coverage must be transformed in z-scores sample by sample.
-         */
-        SAMPLE,
-
-        /**
-         * Input coverage must be transformed in z-scores target by target.
-         */
-        TARGET,
-
-        /**
-         * No transformation must be performed.
-         */
-        NONE
-    }
-
     @Argument(
-            doc = "In what dimension apply the zscore transformation",
-            fullName = ZSCORE_DIMENSION_FULL_NAME,
-            shortName = ZSCORE_DIMENSION_SHORT_NAME,
-            optional = false
-    )
-    protected ZScoreDimension zscoreDimension = ZScoreDimension.SAMPLE;
-
-    @Argument(
-            doc = "Input counts",
+            doc = "Input tangent-normalized counts in units of log-2 copy ratio.",
             fullName = StandardArgumentDefinitions.INPUT_LONG_NAME,
             shortName = StandardArgumentDefinitions.INPUT_SHORT_NAME,
             optional = false
@@ -118,7 +85,6 @@ public abstract class CopyNumberTriStateSegmentCaller extends CommandLineProgram
         final CopyNumberTriStateHiddenMarkovModel model = modelArguments.createModel();
         final TargetCollection<Target> targets = targetArguments.readTargetCollection(false);
         final ReadCountCollection inputCounts = readAndSortCountsByTargetCoordinates(targets);
-        applyZScoreTransformation(inputCounts);
         checkForMissingTargetsInInputCounts(targets, inputCounts);
         openOutput(outputFile, model, targets, inputCounts);
         makeCalls(model, targets, inputCounts);
@@ -157,48 +123,6 @@ public abstract class CopyNumberTriStateSegmentCaller extends CommandLineProgram
     protected abstract void makeCalls(final CopyNumberTriStateHiddenMarkovModel model,
                                         final TargetCollection<Target> targets,
                                         final ReadCountCollection inputCounts);
-
-    /**
-     * Transform read counts to z-scores.
-     * @param inputCounts the input read-counts, modified in-situ.
-     */
-    private final void applyZScoreTransformation(final ReadCountCollection inputCounts) {
-        final RealMatrix counts = inputCounts.counts();
-        switch (zscoreDimension) {
-            case SAMPLE:
-                standardizeBySample(counts);
-                break;
-            case TARGET:
-                standardizeByTarget(counts);
-                break;
-        }
-    }
-
-    private void standardizeByTarget(final RealMatrix counts) {
-        final double[] rowMeans = GATKProtectedMathUtils.rowMeans(counts);
-        final double[] rowStdDev = GATKProtectedMathUtils.rowStdDevs(counts);
-
-        counts.walkInColumnOrder(new DefaultRealMatrixChangingVisitor() {
-            @Override
-            public double visit(final int row, final int column, final double value) {
-                return (value - rowMeans[row]) / rowStdDev[row];
-            }
-
-        });
-    }
-
-    private void standardizeBySample(final RealMatrix counts) {
-        final double[] columnMeans = GATKProtectedMathUtils.columnMeans(counts);
-        final double[] columnStdDev = GATKProtectedMathUtils.columnStdDevs(counts);
-
-        counts.walkInColumnOrder(new DefaultRealMatrixChangingVisitor() {
-            @Override
-            public double visit(int row, int column, double value) {
-                return (value - columnMeans[column]) / columnStdDev[column];
-            }
-
-        });
-    }
 
     private ReadCountCollection readAndSortCountsByTargetCoordinates(final TargetCollection<Target> targets) {
 
