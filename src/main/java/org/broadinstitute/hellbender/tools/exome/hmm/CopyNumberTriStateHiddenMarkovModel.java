@@ -52,26 +52,19 @@ public final class CopyNumberTriStateHiddenMarkovModel
     private static final List<CopyNumberTriState> HIDDEN_STATES =
             Collections.unmodifiableList(Arrays.asList(CopyNumberTriState.values()));
 
-    /**
-    * The assumed stddev for coverage values in a copy neutral segment.
-    */
-    private static final double NEUTRAL_DISTRIBUTION_SD = 1.0;
+    // ballpark estimate of standard deviation of tangent-normalized coverage
+    // this should become target-specific by using inverse variances from the PoN
+    private static final double ASSUMED_STDEV_OF_TANGENT_NORMALIZED_COVERAGE = 0.1;
 
-    /**
-     * The assumed stddev for coverage values in a deletion.
-     */
-    private static final double DELETION_DISTRIBUTION_SD = 1.0;
+    private static final double DELETION_COPY_RATIO = 0.5;
+    private static final double DUPLICATION_COPY_RATIO = 1.5;
+    private static final double NEUTRAL_DISTRIBUTION_SD = ASSUMED_STDEV_OF_TANGENT_NORMALIZED_COVERAGE;
+    private static final double DELETION_DISTRIBUTION_SD = ASSUMED_STDEV_OF_TANGENT_NORMALIZED_COVERAGE * DELETION_COPY_RATIO;
+    private static final double DUPLICATION_DISTRIBUTION_SD = ASSUMED_STDEV_OF_TANGENT_NORMALIZED_COVERAGE*DUPLICATION_COPY_RATIO;
+    protected static final double LOG_2_COPY_RATIO_OF_DELETION = Math.log(DELETION_COPY_RATIO)/Math.log(2.0); //this is log_2(1/2)
+    protected static final double LOG_2_COPY_RATIO_OF_DUPLICATION = Math.log(DUPLICATION_COPY_RATIO)/Math.log(2.0); //this is log_2(3/2)
 
-    /**
-     * The assumed stddev for coverage values in a duplication.
-     */
-    private static final double DUPLICATION_DISTRIBUTION_SD = 1.0;
-
-    protected static final double LOG_2_COPY_RATIO_FOR_SINGLE_DELETION = Math.log(0.5)/Math.log(2.0); //this is log_2(1/2)
-
-    protected static final double LOG_2_COPY_RATIO_FOR_SINGLE_DUPLICATION = Math.log(1.5)/Math.log(2.0);
-
-    private final Map<CopyNumberTriState, NormalDistribution> emissionDistributionByState; //this is log_2(3/2)
+    private final Map<CopyNumberTriState, NormalDistribution> emissionDistributionByState;
 
     private final CopyNumberTriStateTransitionProbabilityCache logTransitionProbabilityCache;
 
@@ -102,9 +95,9 @@ public final class CopyNumberTriStateHiddenMarkovModel
         emissionDistributionByState.put(CopyNumberTriState.NEUTRAL,
                 new NormalDistribution(0, NEUTRAL_DISTRIBUTION_SD));
         emissionDistributionByState.put(CopyNumberTriState.DELETION,
-                new NormalDistribution(LOG_2_COPY_RATIO_FOR_SINGLE_DELETION, DELETION_DISTRIBUTION_SD));
+                new NormalDistribution(LOG_2_COPY_RATIO_OF_DELETION, DELETION_DISTRIBUTION_SD));
         emissionDistributionByState.put(CopyNumberTriState.DUPLICATION,
-                new NormalDistribution(LOG_2_COPY_RATIO_FOR_SINGLE_DUPLICATION, DUPLICATION_DISTRIBUTION_SD));
+                new NormalDistribution(LOG_2_COPY_RATIO_OF_DUPLICATION, DUPLICATION_DISTRIBUTION_SD));
     }
 
     @Override

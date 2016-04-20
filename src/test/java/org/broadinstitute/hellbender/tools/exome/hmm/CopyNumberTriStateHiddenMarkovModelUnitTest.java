@@ -52,8 +52,8 @@ public final class CopyNumberTriStateHiddenMarkovModelUnitTest {
         final Target target = new Target("NAME");
         final double logDenominator = Math.log(Math.sqrt(2 * Math.PI));
         final Function<Double, Double> neutralEmission = x -> -.5 * (x * x) - logDenominator;
-        final Function<Double, Double> deletionEmission = x -> -.5 * Math.pow(x - CopyNumberTriStateHiddenMarkovModel.LOG_2_COPY_RATIO_FOR_SINGLE_DELETION, 2) - logDenominator;
-        final Function<Double, Double> duplicationEmission = x -> -.5 * Math.pow(x - CopyNumberTriStateHiddenMarkovModel.LOG_2_COPY_RATIO_FOR_SINGLE_DUPLICATION, 2) - logDenominator;
+        final Function<Double, Double> deletionEmission = x -> -.5 * Math.pow(x - CopyNumberTriStateHiddenMarkovModel.LOG_2_COPY_RATIO_OF_DELETION, 2) - logDenominator;
+        final Function<Double, Double> duplicationEmission = x -> -.5 * Math.pow(x - CopyNumberTriStateHiddenMarkovModel.LOG_2_COPY_RATIO_OF_DUPLICATION, 2) - logDenominator;
         for (final double coverage : TEST_COVERAGE_VALUES) {
             final double neutralObserved = model.logEmissionProbability(coverage, CopyNumberTriState.NEUTRAL, target);
             final double deletionObserved = model.logEmissionProbability(coverage, CopyNumberTriState.DELETION, target);
