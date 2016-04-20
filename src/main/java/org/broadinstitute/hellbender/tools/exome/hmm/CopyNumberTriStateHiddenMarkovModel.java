@@ -58,9 +58,12 @@ public final class CopyNumberTriStateHiddenMarkovModel
 
     private static final double DELETION_COPY_RATIO = 0.5;
     private static final double DUPLICATION_COPY_RATIO = 1.5;
+
+    // eg del coverage = 0.5*neutral coverage, so log del coverage = const + log neutral coverage
+    // and thus all copy ratio states have the same stddev of tangent-normalized coverage in log space
     private static final double NEUTRAL_DISTRIBUTION_SD = ASSUMED_STDEV_OF_TANGENT_NORMALIZED_COVERAGE;
-    private static final double DELETION_DISTRIBUTION_SD = ASSUMED_STDEV_OF_TANGENT_NORMALIZED_COVERAGE * DELETION_COPY_RATIO;
-    private static final double DUPLICATION_DISTRIBUTION_SD = ASSUMED_STDEV_OF_TANGENT_NORMALIZED_COVERAGE*DUPLICATION_COPY_RATIO;
+    private static final double DELETION_DISTRIBUTION_SD = ASSUMED_STDEV_OF_TANGENT_NORMALIZED_COVERAGE;
+    private static final double DUPLICATION_DISTRIBUTION_SD = ASSUMED_STDEV_OF_TANGENT_NORMALIZED_COVERAGE;
     protected static final double LOG_2_COPY_RATIO_OF_DELETION = Math.log(DELETION_COPY_RATIO)/Math.log(2.0); //this is log_2(1/2)
     protected static final double LOG_2_COPY_RATIO_OF_DUPLICATION = Math.log(DUPLICATION_COPY_RATIO)/Math.log(2.0); //this is log_2(3/2)
 
