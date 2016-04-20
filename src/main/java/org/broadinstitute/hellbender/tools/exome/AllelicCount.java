@@ -16,6 +16,7 @@ public final class AllelicCount implements Locatable {
     private final SimpleInterval interval;
     private final int refReadCount, altReadCount;
     private Nucleotide refNucleotide, altNucleotide;
+    private int readDepth;
 
     public AllelicCount(final SimpleInterval interval, final int refReadCount, final int altReadCount) {
         ParamUtils.isPositiveOrZero(refReadCount, "Can't construct AllelicCount with negative read counts.");
@@ -34,6 +35,13 @@ public final class AllelicCount implements Locatable {
         this.altNucleotide = altNucleotide;
     }
 
+    public AllelicCount(final SimpleInterval interval, final int readDepth) {
+        this.refReadCount = 0;
+        this.altReadCount = 0;
+        this.interval = interval;
+        this.readDepth = readDepth;
+    }
+
     @Override
     public String getContig() { return interval.getContig(); }
 
@@ -48,6 +56,8 @@ public final class AllelicCount implements Locatable {
     public int getRefReadCount() { return refReadCount; }
 
     public int getAltReadCount() { return altReadCount; }
+
+    public int getReadDepth() { return readDepth; }
 
     public Nucleotide getRefNucleotide() { return refNucleotide; }
 

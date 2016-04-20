@@ -78,6 +78,10 @@ public class AllelicCountCollection {
         counts.add(new AllelicCount(interval, refReadCount, altReadCount, refNucleotide, altNucleotide));
     }
 
+    public void add(final SimpleInterval interval, final int readDepth) {
+        counts.add(new AllelicCount(interval, readDepth));
+    }
+
     /** Returns an unmodifiable view of the list of AllelicCounts.   */
     public List<AllelicCount> getCounts() {
         return Collections.unmodifiableList(counts);
@@ -105,6 +109,20 @@ public class AllelicCountCollection {
                     final int refReadCount = count.getRefReadCount();
                     final int altReadCount = count.getAltReadCount();
                     dataLine.append(interval.getContig()).append(interval.getEnd(), refReadCount, altReadCount);
+                })) {
+            writer.writeAllRecords(counts);
+        } catch (final IOException e) {
+            throw new UserException.CouldNotCreateOutputFile(outputFile, e);
+        }
+    }
+
+    public void writeReadDepth(final File outputFile) {
+        try (final TableWriter<AllelicCount> writer = TableUtils.writer(outputFile,
+                new TableColumnCollection("CONTIG", "POS", "READ_DEPTH"),
+                (count, dataLine) -> {
+                    final SimpleInterval interval = count.getInterval();
+                    final int readDepth = count.getReadDepth();
+                    dataLine.append(interval.getContig()).append(interval.getEnd(), readDepth);
                 })) {
             writer.writeAllRecords(counts);
         } catch (final IOException e) {

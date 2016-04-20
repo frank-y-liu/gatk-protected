@@ -668,4 +668,51 @@ public final class BayesianHetPulldownCalculator {
         }
     }
 
+    public Pulldown getReadDepthPulldown(final File bamFile) {
+
+        try (final SamReader bamReader = SamReaderFactory.makeDefault().validationStringency(validationStringency)
+                .referenceSequence(refFile).open(bamFile)) {
+            if (bamReader.getFileHeader().getSortOrder() != SAMFileHeader.SortOrder.coordinate) {
+                throw new UserException.BadInput("BAM file " + bamFile.toString() + " must be coordinate sorted.");
+            }
+
+            final Pulldown readDepthPulldown = new Pulldown(bamReader.getFileHeader());
+
+            final int totalNumberOfSNPs = snpIntervals.size();
+            final SamLocusIterator locusIterator = new SamLocusIterator(bamReader, snpIntervals,
+                    totalNumberOfSNPs < MAX_INTERVALS_FOR_INDEX);
+
+            /* set read and locus filters */
+            final List<SamRecordFilter> samFilters = Arrays.asList(new NotPrimaryAlignmentFilter(),
+                    new DuplicateReadFilter());
+            locusIterator.setSamFilters(samFilters);
+            locusIterator.setEmitUncoveredLoci(false);
+            locusIterator.setIncludeNonPfReads(false);
+            locusIterator.setMappingQualityScoreCutoff(minMappingQuality);
+            locusIterator.setQualityScoreCutoff(minBaseQuality);
+
+            logger.info("Examining " + totalNumberOfSNPs + " sites in total...");
+            int locusCount = 0;
+            for (final SamLocusIterator.LocusInfo locus : locusIterator) {
+                if (locusCount % NUMBER_OF_SITES_PER_LOGGED_STATUS_UPDATE == 0) {
+                    logger.info("Examined " + locusCount + " covered sites.");
+                }
+                locusCount++;
+
+                final int totalReadCount = locus.getRecordAndPositions().size();
+
+                readDepthPulldown.add(new SimpleInterval(locus.getSequenceName(), locus.getPosition(), locus.getPosition()),
+                        totalReadCount);
+            }
+
+            logger.info(locusCount + " covered sites out of " + totalNumberOfSNPs + " total sites were examined.");
+
+            return readDepthPulldown;
+
+        } catch (final IOException | SAMFormatException e) {
+            throw new UserException(e.getMessage());
+        }
+
+    }
+
 }
