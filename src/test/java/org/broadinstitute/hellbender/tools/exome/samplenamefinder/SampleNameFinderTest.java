@@ -18,14 +18,12 @@ public class SampleNameFinderTest extends BaseTest {
 
     @Test
     public void testSampleNameFinderEasy() {
-
         final List<String> guess = SampleNameFinder.determineSampleNamesFromReadCountsFile(INPUT_FILE);
         Assert.assertEquals(guess.size(), 1);
         Assert.assertEquals(guess.get(0), "HCC1143");
-
     }
 
-    @Test(expectedExceptions = UserException.BadInput.class)
+    @Test
     public void testSampleNameFinder2Sample() {
         final List<String> guess = SampleNameFinder.determineSampleNamesFromReadCountsFile(TWO_SAMPLE_INPUT_FILE);
     }

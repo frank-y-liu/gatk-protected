@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender.tools.exome.samplenamefinder;
 
+import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.exome.ReadCountCollectionUtils;
 import org.broadinstitute.hellbender.tools.exome.SegmentUtils;
 import org.broadinstitute.hellbender.utils.Utils;
@@ -22,7 +23,12 @@ public class SampleNameFinder {
     public static List<String> determineSampleNamesFromReadCountsFile(final File readCountsFile) {
         Utils.nonNull(readCountsFile);
         Utils.regularReadableUserFile(readCountsFile);
-        return ReadCountCollectionUtils.retrieveSampleNamesFromReadCountsFile(readCountsFile);
+        final List<String> result = ReadCountCollectionUtils.retrieveSampleNamesFromReadCountsFile(readCountsFile);
+        if (result.size() == 0) {
+            throw new UserException.BadInput("Input read counts file contains no sample columns");
+        } else {
+            return result;
+        }
     }
 
     public static List<String> determineSampleNamesFromSegmentFile(final File segmentFile) {

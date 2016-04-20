@@ -1,4 +1,4 @@
-NAME	CONTIG	START	END	test
+name	contig	start	stop	test
 t1	1	1	10	-0.41
 t2	1	11	20	0.22
 t3	1	21	30	0.53

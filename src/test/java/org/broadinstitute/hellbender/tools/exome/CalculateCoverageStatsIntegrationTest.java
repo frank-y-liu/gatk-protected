@@ -32,9 +32,9 @@ public final class CalculateCoverageStatsIntegrationTest extends CommandLineProg
 
     public static final double EPSILON = 0.00001;
 
-    private static final int[] TEST_SAMPLE_COUNTS = new int[] { 1, 2, 5, 10, 20, 100 };
+    private static final int[] TEST_SAMPLE_COUNTS = new int[] { 1, 5, 100 };
 
-    private static final int[] TEST_TARGET_COUNTS = new int[] { 1, 2, 3, 11, 31 };
+    private static final int[] TEST_TARGET_COUNTS = new int[] { 1, 3, 30 };
 
     private static final Random TEST_RANDOM = new Random(13);
 

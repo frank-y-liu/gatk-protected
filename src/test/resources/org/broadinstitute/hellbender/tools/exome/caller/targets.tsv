@@ -1,4 +1,4 @@
-CONTIG	START	END	NAME	MySampleName
+contig	start	stop	name	MySampleName
 chr	100	101	t_1	1.0
 chr	102	103	t_2	1.0
 chr	104	105	t_3	1.0
